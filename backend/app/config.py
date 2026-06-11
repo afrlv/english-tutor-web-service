@@ -1,0 +1,28 @@
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    database_url: str = "postgresql+asyncpg://teacher:teacher@localhost:5432/teacher"
+
+    jwt_secret: str = "dev-secret"
+    jwt_ttl_hours: int = 24
+
+    superuser_email: str = "admin@example.com"
+    superuser_password: str = "admin12345"
+    teacher_email: str = "teacher@example.com"
+    teacher_password: str = "teacher12345"
+
+    email_backend: str = "console"
+
+    scheduler_enabled: bool = False
+    digest_hour: int = 7
+    tz: str = "Europe/Moscow"
+
+    media_dir: str = "media"
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Bash(npm run *)",
+      "Bash(git *)",
+      "Bash(npx vitest *)",
+      "mcp__browser__navigate"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(cat .env*)"
+    ]
+  }
+}

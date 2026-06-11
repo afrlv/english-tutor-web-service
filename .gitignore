@@ -1,0 +1,21 @@
+# env
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# node
+node_modules/
+frontend/dist/
+
+# media (загруженные аватарки)
+backend/media/
+
+# local claude settings
+.claude/settings.local.json
+
+# misc
+.DS_Store
