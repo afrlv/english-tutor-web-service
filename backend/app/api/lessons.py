@@ -89,8 +89,29 @@ async def get_lesson_detail(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Урок не найден")
     lesson, name = row
+    prev_id = await db.scalar(
+        select(Lesson.id)
+        .where(
+            Lesson.student_id == lesson.student_id,
+            Lesson.scheduled_at < lesson.scheduled_at,
+        )
+        .order_by(Lesson.scheduled_at.desc(), Lesson.id.desc())
+        .limit(1)
+    )
+    next_id = await db.scalar(
+        select(Lesson.id)
+        .where(
+            Lesson.student_id == lesson.student_id,
+            Lesson.scheduled_at > lesson.scheduled_at,
+        )
+        .order_by(Lesson.scheduled_at, Lesson.id)
+        .limit(1)
+    )
     return LessonCalendarOut(
-        **LessonOut.model_validate(lesson).model_dump(), student_name=name
+        **LessonOut.model_validate(lesson).model_dump(),
+        student_name=name,
+        prev_id=prev_id,
+        next_id=next_id,
     )
 
 

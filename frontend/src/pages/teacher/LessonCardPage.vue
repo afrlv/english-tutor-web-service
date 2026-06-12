@@ -10,7 +10,7 @@ import Tag from "primevue/tag";
 import Textarea from "primevue/textarea";
 import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
-import { ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import {
@@ -44,7 +44,8 @@ const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const confirm = useConfirm();
-const lessonId = Number(route.params.id);
+// Реактивно: листание prev/next меняет id маршрута без размонтирования
+const lessonId = computed(() => Number(route.params.id));
 
 const lesson = ref<CalendarLesson | null>(null);
 const editOpen = ref(false);
@@ -74,19 +75,23 @@ function showError(e: unknown, fallback: string) {
 
 async function load() {
   try {
-    lesson.value = await getLessonDetail(lessonId);
+    lesson.value = await getLessonDetail(lessonId.value);
   } catch {
     router.push("/students");
   }
 }
 load();
+// Листание prev/next меняет только параметр маршрута — перезагружаем урок
+watch(lessonId, () => {
+  if (!Number.isNaN(lessonId.value)) load();
+});
 
 // --- статусные действия ---
 
 async function onConduct() {
   acting.value = true;
   try {
-    await conductLesson(lessonId);
+    await conductLesson(lessonId.value);
     await load();
     toast.add({ severity: "success", summary: "Урок проведён, оплата начислена", life: 3000 });
   } catch (e) {
@@ -99,7 +104,7 @@ async function onConduct() {
 async function onRevert() {
   acting.value = true;
   try {
-    await revertLesson(lessonId);
+    await revertLesson(lessonId.value);
     await load();
   } catch (e) {
     showError(e, "Не удалось откатить урок");
@@ -110,7 +115,7 @@ async function onRevert() {
 
 async function onCancelConfirm(kind: CancelKind, comment: string | null, amount: string | null) {
   try {
-    await cancelLesson(lessonId, kind, comment, amount);
+    await cancelLesson(lessonId.value, kind, comment, amount);
     cancelOpen.value = false;
     await load();
   } catch (e) {
@@ -120,7 +125,7 @@ async function onCancelConfirm(kind: CancelKind, comment: string | null, amount:
 
 async function onRestore() {
   try {
-    await restoreLesson(lessonId);
+    await restoreLesson(lessonId.value);
     await load();
   } catch (e) {
     showError(e, "Не удалось восстановить урок");
@@ -136,7 +141,7 @@ function onDelete() {
     acceptProps: { severity: "danger" },
     accept: async () => {
       try {
-        await deleteLesson(lessonId);
+        await deleteLesson(lessonId.value);
         router.push(`/students/${lesson.value?.student_id}`);
       } catch (e) {
         showError(e, "Не удалось удалить урок");
@@ -147,7 +152,7 @@ function onDelete() {
 
 async function saveEdit(data: LessonInput) {
   try {
-    await updateLesson(lessonId, data);
+    await updateLesson(lessonId.value, data);
     editOpen.value = false;
     await load();
   } catch (e) {
@@ -162,7 +167,7 @@ async function onMaterialFile(event: Event) {
   (event.target as HTMLInputElement).value = "";
   if (!file) return;
   try {
-    await uploadLessonFile(lessonId, file);
+    await uploadLessonFile(lessonId.value, file);
     await load();
   } catch (e) {
     showError(e, "Не удалось загрузить файл");
@@ -172,7 +177,7 @@ async function onMaterialFile(event: Event) {
 async function onAddMaterialLink() {
   if (!materialLinkUrl.value.trim()) return;
   try {
-    await addLessonLink(lessonId, materialLinkUrl.value.trim(), materialLinkName.value.trim() || undefined);
+    await addLessonLink(lessonId.value, materialLinkUrl.value.trim(), materialLinkName.value.trim() || undefined);
     materialLinkUrl.value = "";
     materialLinkName.value = "";
     await load();
@@ -191,7 +196,7 @@ async function onRemoveMaterial(id: number) {
 async function onAddHomework() {
   if (!hwText.value.trim()) return;
   try {
-    await addHomework(lessonId, hwText.value.trim());
+    await addHomework(lessonId.value, hwText.value.trim());
     hwText.value = "";
     await load();
   } catch (e) {
@@ -268,6 +273,24 @@ async function onRemoveHwAttachment(id: number) {
               </span>
             </div>
             <Tag :value="statusLabel(lesson.status)" :severity="statusSeverity(lesson.status)" />
+            <div class="nav">
+              <Button
+                v-tooltip="'Предыдущий урок'"
+                icon="pi pi-chevron-left"
+                text
+                rounded
+                :disabled="!lesson.prev_id"
+                @click="router.push(`/lessons/${lesson.prev_id}`)"
+              />
+              <Button
+                v-tooltip="'Следующий урок'"
+                icon="pi pi-chevron-right"
+                text
+                rounded
+                :disabled="!lesson.next_id"
+                @click="router.push(`/lessons/${lesson.next_id}`)"
+              />
+            </div>
           </div>
         </template>
         <template #content>
@@ -459,6 +482,10 @@ async function onRemoveHwAttachment(id: number) {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+.nav {
+  display: flex;
+  gap: 0.1rem;
 }
 .muted {
   color: var(--p-text-muted-color);

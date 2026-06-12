@@ -87,9 +87,12 @@ class LessonOut(BaseModel):
 
 
 class LessonCalendarOut(LessonOut):
-    """Урок для календаря учителя: + имя ученика."""
+    """Урок для календаря/карточки учителя: + имя ученика."""
 
     student_name: str
+    # Соседние уроки этого ученика по времени — листание карточек
+    prev_id: int | None = None
+    next_id: int | None = None
 
 
 class LessonCreate(BaseModel):

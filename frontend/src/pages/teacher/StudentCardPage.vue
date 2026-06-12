@@ -59,6 +59,7 @@ import type {
   Transaction,
 } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
+import AttachmentList from "../../components/AttachmentList.vue";
 import BalanceCell from "../../components/BalanceCell.vue";
 import CardSetEditor from "../../components/CardSetEditor.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
@@ -101,6 +102,14 @@ const paymentAmount = ref<number | null>(null);
 const paymentComment = ref("");
 
 const lessonPrice = computed(() => parseFloat(parents.value[0]?.lesson_price ?? "0"));
+// История занятий: проведённые уроки, новые сверху
+const conductedLessons = computed(() =>
+  lessons.value
+    .filter((l) => l.status === "conducted")
+    .slice()
+    .sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at)),
+);
+
 const currentDebt = computed(() => {
   const charged = transactions.value
     .filter((t) => t.type === "charge")
@@ -407,6 +416,7 @@ async function onSetPassword() {
         <Tabs value="lessons">
           <TabList>
             <Tab value="lessons">Уроки</Tab>
+            <Tab value="history">История</Tab>
             <Tab value="finance">Финансы</Tab>
             <Tab value="parent">Родитель</Tab>
             <Tab value="cards">Карточки</Tab>
@@ -531,6 +541,37 @@ async function onSetPassword() {
                   </template>
                 </Column>
               </DataTable>
+            </TabPanel>
+
+            <!-- История занятий: конспект проведённых уроков -->
+            <TabPanel value="history">
+              <p v-if="!conductedLessons.length" class="hint">
+                Проведённых уроков пока нет — история появится после первого занятия.
+              </p>
+              <div v-for="l in conductedLessons" :key="l.id" class="feed-item">
+                <div class="feed-head">
+                  <strong>{{ formatDateTime(l.scheduled_at) }}</strong>
+                  <span v-if="l.topic" class="feed-topic">{{ l.topic }}</span>
+                  <Button
+                    label="Открыть"
+                    icon="pi pi-book"
+                    text
+                    size="small"
+                    @click="router.push(`/lessons/${l.id}`)"
+                  />
+                </div>
+                <p v-if="l.recommendation" class="feed-rec">{{ l.recommendation }}</p>
+                <AttachmentList :attachments="l.attachments" />
+                <div v-for="hw in l.homeworks" :key="hw.id" class="feed-hw">
+                  <i :class="hw.is_done ? 'pi pi-check-circle done-icon' : 'pi pi-circle'" />
+                  <span>{{ hw.description }}</span>
+                  <Tag
+                    v-if="hw.grade"
+                    :value="String(hw.grade)"
+                    :severity="hw.grade >= 4 ? 'success' : hw.grade === 3 ? 'warn' : 'danger'"
+                  />
+                </div>
+              </div>
             </TabPanel>
 
             <!-- Финансы -->
@@ -807,6 +848,34 @@ label {
 }
 .hw-form {
   min-width: 26rem;
+}
+.feed-item {
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--p-surface-200);
+}
+.feed-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.feed-topic {
+  font-weight: 600;
+  flex: 1;
+}
+.feed-rec {
+  margin: 0.3rem 0;
+  color: var(--p-text-muted-color);
+  white-space: pre-wrap;
+}
+.feed-hw {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.3rem;
+  font-size: 0.95rem;
+}
+.done-icon {
+  color: var(--p-green-500);
 }
 .set-create {
   display: flex;

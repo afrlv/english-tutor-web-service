@@ -83,6 +83,8 @@ export interface Lesson {
 
 export interface CalendarLesson extends Lesson {
   student_name: string;
+  prev_id?: number | null;
+  next_id?: number | null;
 }
 
 export interface EmailSettings {

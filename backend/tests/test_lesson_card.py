@@ -69,6 +69,31 @@ async def test_student_lesson_card(client, seed_users):
     assert resp.status_code == 403
 
 
+async def test_lesson_prev_next_navigation(client, seed_users):
+    from datetime import datetime, timedelta, timezone
+
+    sid = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    base = datetime.now(timezone.utc)
+    ids = []
+    for days in [1, 2, 3]:
+        lesson = await create_lesson(
+            client, sid, scheduled_at=(base + timedelta(days=days)).isoformat()
+        )
+        ids.append(lesson["id"])
+
+    middle = (await client.get(f"/api/lessons/{ids[1]}")).json()
+    assert middle["prev_id"] == ids[0]
+    assert middle["next_id"] == ids[2]
+
+    first = (await client.get(f"/api/lessons/{ids[0]}")).json()
+    assert first["prev_id"] is None
+    assert first["next_id"] == ids[1]
+
+    last = (await client.get(f"/api/lessons/{ids[2]}")).json()
+    assert last["next_id"] is None
+
+
 async def test_student_cannot_see_foreign_lesson(client, seed_users):
     await login(client, "teacher@test.ru")
     # Второй ученик с уроком
