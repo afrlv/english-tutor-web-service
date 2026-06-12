@@ -38,6 +38,11 @@ export const router = createRouter({
       meta: { roles: ["student"] },
     },
     {
+      path: "/study/:id",
+      component: () => import("../pages/student/StudyPage.vue"),
+      meta: { roles: ["student"] },
+    },
+    {
       path: "/child",
       component: () => import("../pages/parent/ChildPage.vue"),
       meta: { roles: ["parent"] },

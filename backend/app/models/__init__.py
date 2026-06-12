@@ -1,5 +1,6 @@
 from app.models.attachment import HomeworkAttachment
 from app.models.base import Base
+from app.models.cards import Card, CardSet
 from app.models.comment import StudentComment
 from app.models.email import EmailLog, EmailSettings
 from app.models.homework import Homework
@@ -13,6 +14,8 @@ from app.models.user import Role, User
 __all__ = [
     "Base",
     "CancellationKind",
+    "Card",
+    "CardSet",
     "EmailLog",
     "EmailSettings",
     "Homework",

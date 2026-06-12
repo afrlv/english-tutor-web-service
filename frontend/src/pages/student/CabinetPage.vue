@@ -14,10 +14,11 @@ import {
   addMyComment,
   fetchCabinet,
   markHomework,
+  myCardSets,
   myComments,
   uploadAvatar,
 } from "../../api";
-import type { Cabinet, Comment } from "../../api/types";
+import type { Cabinet, CardSetSummary, Comment } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
 import AttachmentList from "../../components/AttachmentList.vue";
 import { useAuthStore } from "../../stores/auth";
@@ -28,6 +29,7 @@ const auth = useAuthStore();
 
 const cabinet = ref<Cabinet | null>(null);
 const comments = ref<Comment[]>([]);
+const cardSets = ref<CardSetSummary[]>([]);
 const newComment = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
 
@@ -42,7 +44,11 @@ const past = computed(
 );
 
 async function load() {
-  [cabinet.value, comments.value] = await Promise.all([fetchCabinet(), myComments()]);
+  [cabinet.value, comments.value, cardSets.value] = await Promise.all([
+    fetchCabinet(),
+    myComments(),
+    myCardSets(),
+  ]);
 }
 
 onMounted(load);
@@ -197,6 +203,22 @@ async function onAddComment() {
         </template>
       </Card>
 
+      <Card v-if="cardSets.length">
+        <template #title>Карточки для запоминания</template>
+        <template #content>
+          <div v-for="s in cardSets" :key="s.id" class="set-row">
+            <span class="set-title">{{ s.title }}</span>
+            <span class="set-progress">{{ s.learned }} / {{ s.total }} выучено</span>
+            <Button
+              label="Учить"
+              icon="pi pi-play"
+              size="small"
+              @click="$router.push(`/study/${s.id}`)"
+            />
+          </div>
+        </template>
+      </Card>
+
       <Card>
         <template #title>Прошедшие уроки</template>
         <template #content>
@@ -245,6 +267,20 @@ async function onAddComment() {
 }
 .hw-lesson {
   margin-bottom: 0.75rem;
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0;
+}
+.set-title {
+  font-weight: 600;
+  min-width: 10rem;
+}
+.set-progress {
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
 }
 .hw-item {
   margin: 0.4rem 0 0.75rem;

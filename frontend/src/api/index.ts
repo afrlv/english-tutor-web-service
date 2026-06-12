@@ -3,6 +3,9 @@ import type {
   Balance,
   Cabinet,
   CalendarLesson,
+  Card,
+  CardSet,
+  CardSetSummary,
   ChildCard,
   Comment,
   EmailLogEntry,
@@ -154,6 +157,32 @@ export const createScheduleSlot = (studentId: number, weekday: number, start_tim
     .post<ScheduleSlot>(`/students/${studentId}/schedule`, { weekday, start_time })
     .then((r) => r.data);
 export const deleteScheduleSlot = (slotId: number) => api.delete(`/schedule/${slotId}`);
+
+// --- карточки (наборы слов) ---
+export const listCardSets = (studentId: number) =>
+  api.get<CardSetSummary[]>(`/students/${studentId}/card-sets`).then((r) => r.data);
+export const createCardSet = (
+  studentId: number,
+  title: string,
+  cards: { front: string; back: string }[],
+) => api.post<CardSet>(`/students/${studentId}/card-sets`, { title, cards }).then((r) => r.data);
+export const getCardSet = (setId: number) =>
+  api.get<CardSet>(`/card-sets/${setId}`).then((r) => r.data);
+export const renameCardSet = (setId: number, title: string) =>
+  api.patch<CardSet>(`/card-sets/${setId}`, { title }).then((r) => r.data);
+export const deleteCardSet = (setId: number) => api.delete(`/card-sets/${setId}`);
+export const addCard = (setId: number, front: string, back: string) =>
+  api.post<Card>(`/card-sets/${setId}/cards`, { front, back }).then((r) => r.data);
+export const updateCard = (cardId: number, front: string, back: string) =>
+  api.patch<Card>(`/cards/${cardId}`, { front, back }).then((r) => r.data);
+export const deleteCard = (cardId: number) => api.delete(`/cards/${cardId}`);
+// сторона ученика
+export const myCardSets = () =>
+  api.get<CardSetSummary[]>("/me/card-sets").then((r) => r.data);
+export const myCardSet = (setId: number) =>
+  api.get<CardSet>(`/me/card-sets/${setId}`).then((r) => r.data);
+export const answerCard = (cardId: number, correct: boolean) =>
+  api.post<Card>(`/me/cards/${cardId}/answer`, { correct }).then((r) => r.data);
 
 // --- comments ---
 export const listComments = (studentId: number) =>

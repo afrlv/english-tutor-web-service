@@ -94,6 +94,31 @@ export interface EmailLogEntry {
   created_at: string;
 }
 
+export interface Card {
+  id: number;
+  set_id: number;
+  front: string;
+  back: string;
+  position: number;
+  times_correct: number;
+  times_wrong: number;
+}
+
+export interface CardSet {
+  id: number;
+  student_id: number;
+  title: string;
+  cards: Card[];
+}
+
+export interface CardSetSummary {
+  id: number;
+  student_id: number;
+  title: string;
+  total: number;
+  learned: number;
+}
+
 export interface ScheduleSlot {
   id: number;
   student_id: number;

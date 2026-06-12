@@ -29,15 +29,19 @@ import {
   addPayment,
   cancelLesson,
   conductLesson,
+  createCardSet,
   createLesson,
   createParent,
   createScheduleSlot,
   deleteAttachment,
+  deleteCardSet,
   deleteHomework,
   deleteLesson,
+  getCardSet,
   deleteScheduleSlot,
   getStudent,
   type LessonInput,
+  listCardSets,
   listComments,
   listLessons,
   listParents,
@@ -54,6 +58,8 @@ import {
   uploadHomeworkFile,
 } from "../../api";
 import type {
+  CardSet,
+  CardSetSummary,
   Comment,
   Lesson,
   Parent,
@@ -64,6 +70,7 @@ import type {
 import AppLayout from "../../components/AppLayout.vue";
 import AttachmentList from "../../components/AttachmentList.vue";
 import BalanceCell from "../../components/BalanceCell.vue";
+import CardSetEditor from "../../components/CardSetEditor.vue";
 import CancelLessonDialog, { type CancelKind } from "../../components/CancelLessonDialog.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
@@ -88,6 +95,10 @@ const lessonInitialDate = ref<Date | null>(null);
 const cancellingLesson = ref<Lesson | null>(null);
 // профиль
 const profileForm = ref({ full_name: "", default_zoom_link: "", birthday: null as Date | null });
+// наборы карточек
+const cardSets = ref<CardSetSummary[]>([]);
+const openSet = ref<CardSet | null>(null);
+const newSetTitle = ref("");
 // повторяющееся расписание
 const slots = ref<ScheduleSlot[]>([]);
 const newSlotDay = ref<number | null>(null);
@@ -102,6 +113,13 @@ const linkUrl = ref("");
 const linkName = ref("");
 const hwFileInput = ref<HTMLInputElement | null>(null);
 const uploadHomeworkId = ref<number | null>(null);
+// вложения, выбранные до создания ДЗ (в диалоге «Новое ДЗ»)
+const newHwFilesInput = ref<HTMLInputElement | null>(null);
+const pendingFiles = ref<File[]>([]);
+const pendingLinks = ref<{ url: string; name: string }[]>([]);
+const pendingLinkUrl = ref("");
+const pendingLinkName = ref("");
+const savingHomework = ref(false);
 // родитель
 const parentForm = ref({ email: "", full_name: "", lesson_price: 0, recommendations: "" });
 // финансы
@@ -144,13 +162,14 @@ async function loadAll() {
     default_zoom_link: student.value.default_zoom_link ?? "",
     birthday: student.value.birthday ? new Date(student.value.birthday) : null,
   };
-  [lessons.value, parents.value, comments.value, transactions.value, slots.value] =
+  [lessons.value, parents.value, comments.value, transactions.value, slots.value, cardSets.value] =
     await Promise.all([
       listLessons(studentId),
       listParents(studentId),
       listComments(studentId),
       listTransactions(studentId),
       listSchedule(studentId),
+      listCardSets(studentId),
     ]);
   const p = parents.value[0];
   if (p) {
@@ -206,6 +225,46 @@ async function onRemoveSlot(slot: ScheduleSlot) {
         ]);
       } catch (e) {
         showError(e, "Не удалось удалить слот");
+      }
+    },
+  });
+}
+
+// --- наборы карточек ---
+
+async function onCreateSet() {
+  if (!newSetTitle.value.trim()) return;
+  try {
+    const created = await createCardSet(studentId, newSetTitle.value.trim(), []);
+    newSetTitle.value = "";
+    cardSets.value = await listCardSets(studentId);
+    openSet.value = created; // сразу открываем для наполнения
+  } catch (e) {
+    showError(e, "Не удалось создать набор");
+  }
+}
+
+async function onOpenSet(setId: number) {
+  openSet.value = await getCardSet(setId);
+}
+
+async function onSetChanged() {
+  cardSets.value = await listCardSets(studentId);
+}
+
+function onDeleteSet(s: CardSetSummary) {
+  confirm.require({
+    message: `Удалить набор «${s.title}» (${s.total} карт.)?`,
+    header: "Подтверждение",
+    acceptLabel: "Удалить",
+    rejectLabel: "Отмена",
+    acceptProps: { severity: "danger" },
+    accept: async () => {
+      try {
+        await deleteCardSet(s.id);
+        cardSets.value = await listCardSets(studentId);
+      } catch (e) {
+        showError(e, "Не удалось удалить набор");
       }
     },
   });
@@ -351,15 +410,40 @@ function onDeleteLesson(lesson: Lesson) {
 
 // --- ДЗ ---
 
+function onPickNewHwFiles(event: Event) {
+  const files = (event.target as HTMLInputElement).files;
+  if (files) pendingFiles.value.push(...Array.from(files));
+  (event.target as HTMLInputElement).value = "";
+}
+
+function addPendingLink() {
+  const url = pendingLinkUrl.value.trim();
+  if (!url) return;
+  pendingLinks.value.push({ url, name: pendingLinkName.value.trim() || url });
+  pendingLinkUrl.value = "";
+  pendingLinkName.value = "";
+}
+
 async function onAddHomework() {
   if (!homeworkLesson.value || !homeworkText.value.trim()) return;
+  savingHomework.value = true;
   try {
-    await addHomework(homeworkLesson.value.id, homeworkText.value.trim());
+    const hw = await addHomework(homeworkLesson.value.id, homeworkText.value.trim());
+    for (const file of pendingFiles.value) {
+      await uploadHomeworkFile(hw.id, file);
+    }
+    for (const link of pendingLinks.value) {
+      await addHomeworkLink(hw.id, link.url, link.name);
+    }
     homeworkText.value = "";
+    pendingFiles.value = [];
+    pendingLinks.value = [];
     homeworkLesson.value = null;
     lessons.value = await listLessons(studentId);
   } catch (e) {
     showError(e, "Не удалось добавить задание");
+  } finally {
+    savingHomework.value = false;
   }
 }
 
@@ -508,6 +592,7 @@ async function onSetPassword() {
             <Tab value="lessons">Уроки</Tab>
             <Tab value="finance">Финансы</Tab>
             <Tab value="parent">Родитель</Tab>
+            <Tab value="cards">Карточки</Tab>
             <Tab value="comments">Комментарии</Tab>
             <Tab value="note">Личная заметка</Tab>
             <Tab value="profile">Профиль</Tab>
@@ -785,6 +870,50 @@ async function onSetPassword() {
               </form>
             </TabPanel>
 
+            <!-- Наборы карточек -->
+            <TabPanel value="cards">
+              <div class="set-create">
+                <InputText
+                  v-model="newSetTitle"
+                  placeholder="Название набора (напр. Unit 3: Food)"
+                  fluid
+                  @keyup.enter="onCreateSet"
+                />
+                <Button
+                  label="Создать набор"
+                  icon="pi pi-plus"
+                  :disabled="!newSetTitle.trim()"
+                  @click="onCreateSet"
+                />
+              </div>
+              <div v-for="s in cardSets" :key="s.id" class="set-row">
+                <span class="set-title">{{ s.title }}</span>
+                <Tag
+                  :value="`${s.learned} / ${s.total} выучено`"
+                  :severity="s.total > 0 && s.learned === s.total ? 'success' : 'secondary'"
+                />
+                <Button
+                  label="Открыть"
+                  icon="pi pi-pencil"
+                  text
+                  size="small"
+                  @click="onOpenSet(s.id)"
+                />
+                <Button
+                  icon="pi pi-trash"
+                  text
+                  rounded
+                  size="small"
+                  severity="danger"
+                  @click="onDeleteSet(s)"
+                />
+              </div>
+              <p v-if="!cardSets.length" class="hint">
+                Наборов пока нет. Создайте набор и наполните его словами — ученик
+                увидит его в своём кабинете и сможет учить.
+              </p>
+            </TabPanel>
+
             <!-- Комментарии -->
             <TabPanel value="comments">
               <div v-for="c in comments" :key="c.id" class="comment">
@@ -869,9 +998,63 @@ async function onSetPassword() {
       modal
       @update:visible="homeworkLesson = null"
     >
-      <form class="form" @submit.prevent="onAddHomework">
+      <form class="form hw-form" @submit.prevent="onAddHomework">
         <Textarea v-model="homeworkText" rows="3" placeholder="Что задано" fluid />
-        <Button type="submit" label="Добавить" :disabled="!homeworkText.trim()" />
+
+        <div class="attach-section">
+          <Button
+            label="Прикрепить файл (PDF, аудио, фото)"
+            icon="pi pi-paperclip"
+            severity="secondary"
+            outlined
+            size="small"
+            @click="newHwFilesInput?.click()"
+          />
+          <input
+            ref="newHwFilesInput"
+            type="file"
+            multiple
+            accept="application/pdf,image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/ogg,audio/wav"
+            hidden
+            @change="onPickNewHwFiles"
+          />
+          <Chip
+            v-for="(f, i) in pendingFiles"
+            :key="`f-${i}`"
+            :label="f.name"
+            icon="pi pi-paperclip"
+            removable
+            @remove="pendingFiles.splice(i, 1)"
+          />
+
+          <div class="link-add">
+            <InputText v-model="pendingLinkUrl" placeholder="https://… (quizlet, видео)" fluid />
+            <InputText v-model="pendingLinkName" placeholder="Подпись" class="link-name" />
+            <Button
+              icon="pi pi-plus"
+              severity="secondary"
+              outlined
+              size="small"
+              :disabled="!pendingLinkUrl.trim()"
+              @click="addPendingLink"
+            />
+          </div>
+          <Chip
+            v-for="(l, i) in pendingLinks"
+            :key="`l-${i}`"
+            :label="l.name"
+            icon="pi pi-link"
+            removable
+            @remove="pendingLinks.splice(i, 1)"
+          />
+        </div>
+
+        <Button
+          type="submit"
+          label="Добавить"
+          :loading="savingHomework"
+          :disabled="!homeworkText.trim()"
+        />
       </form>
     </Dialog>
 
@@ -892,6 +1075,16 @@ async function onSetPassword() {
         </label>
         <Button type="submit" label="Добавить" :disabled="!linkUrl.trim()" />
       </form>
+    </Dialog>
+
+    <Dialog
+      :visible="openSet !== null"
+      :header="openSet?.title"
+      modal
+      class="set-dialog"
+      @update:visible="openSet = null"
+    >
+      <CardSetEditor v-if="openSet" :card-set="openSet" @changed="onSetChanged" />
     </Dialog>
 
     <input
@@ -964,6 +1157,43 @@ label {
 }
 .grade-select {
   width: 6.5rem;
+}
+.hw-form {
+  min-width: 26rem;
+}
+.set-create {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  max-width: 32rem;
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--p-surface-200);
+}
+.set-title {
+  font-weight: 600;
+  min-width: 12rem;
+}
+.attach-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+.link-add {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+.link-add > :first-child {
+  flex: 1;
+}
+.link-name {
+  width: 9rem;
 }
 .hw-answer {
   margin: 0.25rem 0 0;
