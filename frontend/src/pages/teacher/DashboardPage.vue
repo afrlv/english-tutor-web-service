@@ -1,48 +1,197 @@
 <script setup lang="ts">
+import type { CalendarOptions, EventClickArg } from "@fullcalendar/core";
+import ruLocale from "@fullcalendar/core/locales/ru";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin, { type DateClickArg } from "@fullcalendar/interaction";
+import timeGridPlugin from "@fullcalendar/timegrid";
+import FullCalendar from "@fullcalendar/vue3";
+import Button from "primevue/button";
 import Card from "primevue/card";
 import Column from "primevue/column";
 import DataTable from "primevue/datatable";
+import Dialog from "primevue/dialog";
 import Tag from "primevue/tag";
-import { computed, onMounted, ref } from "vue";
+import { useToast } from "primevue/usetoast";
+import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 
-import { financeSummary, listLessons, listStudents } from "../../api";
-import type { Lesson, Student } from "../../api/types";
+import {
+  conductLesson,
+  createLesson,
+  deleteLesson,
+  financeSummary,
+  listAllLessons,
+  listStudents,
+  revertLesson,
+  updateLesson,
+} from "../../api";
+import type { CalendarLesson, FinanceSummary, Student } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
-import { formatMoney } from "../../utils/format";
+import LessonDialog from "../../components/LessonDialog.vue";
+import { formatDateTime, formatMoney } from "../../utils/format";
 
-interface TodayLesson extends Lesson {
-  student_name: string;
+const router = useRouter();
+const toast = useToast();
+const summary = ref<FinanceSummary | null>(null);
+const loading = ref(true);
+const students = ref<Student[]>([]);
+const calendarRef = ref<InstanceType<typeof FullCalendar> | null>(null);
+const dialogOpen = ref(false);
+const clickedDate = ref<Date | null>(null);
+// Модалка деталей урока (клик по событию в календаре)
+const selectedLesson = ref<CalendarLesson | null>(null);
+const editingLesson = ref<CalendarLesson | null>(null);
+const acting = ref(false);
+
+// Цвета событий по статусу урока
+const statusColors: Record<string, string> = {
+  planned: "var(--p-blue-500)",
+  conducted: "var(--p-green-500)",
+  cancelled: "var(--p-surface-400)",
+};
+
+const calendarOptions = ref<CalendarOptions>({
+  plugins: [timeGridPlugin, dayGridPlugin, interactionPlugin],
+  initialView: "timeGridWeek",
+  locale: ruLocale,
+  headerToolbar: {
+    left: "prev,next today",
+    center: "title",
+    right: "timeGridWeek,dayGridMonth",
+  },
+  height: "auto",
+  nowIndicator: true,
+  // Видимый диапазон рабочего дня; scrollTime — куда проскроллено при открытии
+  slotMinTime: "07:00:00",
+  slotMaxTime: "23:00:00",
+  scrollTime: "09:00:00",
+  allDaySlot: false,
+  // FullCalendar сам запрашивает уроки под видимый диапазон при листании
+  events: async (info, success, failure) => {
+    try {
+      const lessons = await listAllLessons(info.start.toISOString(), info.end.toISOString());
+      success(
+        lessons.map((l) => ({
+          id: String(l.id),
+          title: l.topic ? `${l.student_name}: ${l.topic}` : l.student_name,
+          start: l.scheduled_at,
+          color: statusColors[l.status],
+          extendedProps: { lesson: l },
+        })),
+      );
+    } catch (e) {
+      failure(e as Error);
+    }
+  },
+  // Урок — час по умолчанию (длительность не храним)
+  defaultTimedEventDuration: "01:00",
+  forceEventDuration: true,
+  eventClick: (arg: EventClickArg) => {
+    selectedLesson.value = arg.event.extendedProps.lesson as CalendarLesson;
+  },
+  // Клик по свободному слоту — новый урок на это время
+  dateClick: (arg: DateClickArg) => {
+    const date = new Date(arg.date);
+    if (arg.allDay) date.setHours(12, 0, 0, 0); // в месячной сетке времени нет
+    clickedDate.value = date;
+    dialogOpen.value = true;
+  },
+});
+
+function openCreate() {
+  clickedDate.value = null;
+  editingLesson.value = null;
+  dialogOpen.value = true;
 }
 
-const todayLessons = ref<TodayLesson[]>([]);
-const totalEarned = ref("0");
-const loading = ref(true);
+function openEdit() {
+  editingLesson.value = selectedLesson.value;
+  selectedLesson.value = null;
+  dialogOpen.value = true;
+}
 
-const today = computed(() =>
-  new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long", weekday: "long" }),
-);
+function showError(e: unknown, fallback: string) {
+  const detail =
+    (e as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? fallback;
+  toast.add({ severity: "error", summary: "Ошибка", detail, life: 4000 });
+}
 
-function isToday(iso: string): boolean {
-  const d = new Date(iso);
-  const now = new Date();
-  return d.toDateString() === now.toDateString();
+async function refresh() {
+  calendarRef.value?.getApi().refetchEvents();
+  summary.value = await financeSummary();
+}
+
+async function saveLesson(
+  data: { scheduled_at: string; topic?: string; zoom_link?: string; recommendation?: string },
+  studentId: number | null,
+) {
+  try {
+    if (editingLesson.value) {
+      await updateLesson(editingLesson.value.id, data);
+    } else {
+      if (studentId === null) return;
+      await createLesson(studentId, data);
+    }
+    dialogOpen.value = false;
+    editingLesson.value = null;
+    await refresh();
+    toast.add({ severity: "success", summary: "Урок сохранён", life: 3000 });
+  } catch (e: unknown) {
+    showError(e, "Не удалось сохранить урок");
+  }
+}
+
+async function onConduct() {
+  if (!selectedLesson.value) return;
+  acting.value = true;
+  try {
+    await conductLesson(selectedLesson.value.id);
+    selectedLesson.value = null;
+    await refresh();
+    toast.add({ severity: "success", summary: "Урок проведён, оплата начислена", life: 3000 });
+  } catch (e) {
+    showError(e, "Не удалось отметить урок");
+  } finally {
+    acting.value = false;
+  }
+}
+
+async function onRevert() {
+  if (!selectedLesson.value) return;
+  acting.value = true;
+  try {
+    await revertLesson(selectedLesson.value.id);
+    selectedLesson.value = null;
+    await refresh();
+  } catch (e) {
+    showError(e, "Не удалось откатить урок");
+  } finally {
+    acting.value = false;
+  }
+}
+
+async function onDelete() {
+  if (!selectedLesson.value) return;
+  acting.value = true;
+  try {
+    await deleteLesson(selectedLesson.value.id);
+    selectedLesson.value = null;
+    await refresh();
+    toast.add({ severity: "success", summary: "Урок удалён", life: 3000 });
+  } catch (e) {
+    showError(e, "Не удалось удалить урок");
+  } finally {
+    acting.value = false;
+  }
+}
+
+function toStudentCard() {
+  if (selectedLesson.value) router.push(`/students/${selectedLesson.value.student_id}`);
 }
 
 onMounted(async () => {
   try {
-    const [students, summary] = await Promise.all([listStudents(), financeSummary()]);
-    totalEarned.value = summary.total_earned;
-    const byStudent = await Promise.all(
-      students.map(async (s: Student) => {
-        const lessons = await listLessons(s.id);
-        return lessons
-          .filter((l) => isToday(l.scheduled_at) && l.status !== "cancelled")
-          .map((l) => ({ ...l, student_name: s.user.full_name }));
-      }),
-    );
-    todayLessons.value = byStudent
-      .flat()
-      .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at));
+    [summary.value, students.value] = await Promise.all([financeSummary(), listStudents()]);
   } finally {
     loading.value = false;
   }
@@ -53,40 +202,144 @@ onMounted(async () => {
   <AppLayout>
     <div class="cards">
       <Card>
-        <template #title>Уроки сегодня — {{ today }}</template>
+        <template #title>Заработано всего</template>
         <template #content>
-          <DataTable :value="todayLessons" :loading="loading">
-            <template #empty>Сегодня уроков нет</template>
-            <Column header="Время">
-              <template #body="{ data }">
-                {{ new Date(data.scheduled_at).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) }}
-              </template>
-            </Column>
+          <span class="total">{{ formatMoney(summary?.total_earned ?? 0) }}</span>
+        </template>
+      </Card>
+
+      <Card>
+        <template #title>
+          <div class="schedule-header">
+            Расписание
+            <Button label="Новый урок" icon="pi pi-plus" size="small" @click="openCreate" />
+          </div>
+        </template>
+        <template #content>
+          <FullCalendar ref="calendarRef" :options="calendarOptions" />
+          <div class="legend">
+            <span><i class="dot planned" /> Запланирован</span>
+            <span><i class="dot conducted" /> Проведён</span>
+            <span><i class="dot cancelled" /> Отменён</span>
+          </div>
+        </template>
+      </Card>
+
+      <Card>
+        <template #title>Финансы по ученикам</template>
+        <template #content>
+          <DataTable
+            :value="summary?.students ?? []"
+            :loading="loading"
+            selection-mode="single"
+            @row-select="(e) => router.push(`/students/${e.data.student_id}`)"
+          >
+            <template #empty>Пока нет данных</template>
             <Column field="student_name" header="Ученик" />
-            <Column field="topic" header="Тема" />
-            <Column header="Статус">
-              <template #body="{ data }">
-                <Tag
-                  :value="data.status === 'conducted' ? 'Проведён' : 'Запланирован'"
-                  :severity="data.status === 'conducted' ? 'success' : 'info'"
-                />
-              </template>
+            <Column header="Заработано">
+              <template #body="{ data }">{{ formatMoney(data.earned) }}</template>
             </Column>
-            <Column header="Zoom">
+            <Column header="Оплачено">
+              <template #body="{ data }">{{ formatMoney(data.paid) }}</template>
+            </Column>
+            <Column header="Долг">
               <template #body="{ data }">
-                <a v-if="data.zoom_link" :href="data.zoom_link" target="_blank">Ссылка</a>
+                <span :class="{ debt: parseFloat(data.debt) > 0 }">{{ formatMoney(data.debt) }}</span>
               </template>
             </Column>
           </DataTable>
         </template>
       </Card>
-      <Card>
-        <template #title>Заработано всего</template>
-        <template #content>
-          <span class="total">{{ formatMoney(totalEarned) }}</span>
-        </template>
-      </Card>
     </div>
+
+    <LessonDialog
+      v-model:visible="dialogOpen"
+      :lesson="editingLesson"
+      :students="students"
+      :initial-date="clickedDate"
+      @save="saveLesson"
+    />
+
+    <Dialog
+      :visible="selectedLesson !== null"
+      :header="selectedLesson?.student_name"
+      modal
+      class="lesson-modal"
+      @update:visible="selectedLesson = null"
+    >
+      <template v-if="selectedLesson">
+        <div class="detail">
+          <div class="row">
+            <span class="label">Когда</span>
+            <span>{{ formatDateTime(selectedLesson.scheduled_at) }}</span>
+          </div>
+          <div class="row">
+            <span class="label">Статус</span>
+            <Tag
+              :value="
+                selectedLesson.status === 'conducted'
+                  ? 'Проведён'
+                  : selectedLesson.status === 'cancelled'
+                    ? 'Отменён'
+                    : 'Запланирован'
+              "
+              :severity="
+                selectedLesson.status === 'conducted'
+                  ? 'success'
+                  : selectedLesson.status === 'cancelled'
+                    ? 'danger'
+                    : 'info'
+              "
+            />
+          </div>
+          <div v-if="selectedLesson.topic" class="row">
+            <span class="label">Тема</span>
+            <span>{{ selectedLesson.topic }}</span>
+          </div>
+          <div v-if="selectedLesson.zoom_link" class="row">
+            <span class="label">Zoom</span>
+            <a :href="selectedLesson.zoom_link" target="_blank">Подключиться</a>
+          </div>
+          <div v-if="selectedLesson.recommendation" class="row">
+            <span class="label">Рекомендации</span>
+            <span>{{ selectedLesson.recommendation }}</span>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <Button
+            v-if="selectedLesson.status === 'planned'"
+            label="Проведён"
+            icon="pi pi-check"
+            severity="success"
+            :loading="acting"
+            @click="onConduct"
+          />
+          <Button
+            v-if="selectedLesson.status === 'conducted'"
+            label="Откатить"
+            icon="pi pi-undo"
+            severity="warn"
+            :loading="acting"
+            @click="onRevert"
+          />
+          <Button label="Изменить" icon="pi pi-pencil" severity="secondary" @click="openEdit" />
+          <Button
+            label="Удалить"
+            icon="pi pi-trash"
+            severity="danger"
+            outlined
+            :loading="acting"
+            @click="onDelete"
+          />
+          <Button
+            label="Карточка ученика"
+            icon="pi pi-user"
+            text
+            @click="toStudentCard"
+          />
+        </div>
+      </template>
+    </Dialog>
   </AppLayout>
 </template>
 
@@ -96,8 +349,68 @@ onMounted(async () => {
   flex-direction: column;
   gap: 1rem;
 }
+.schedule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 22rem;
+}
+.row {
+  display: flex;
+  gap: 0.75rem;
+}
+.label {
+  width: 8rem;
+  flex-shrink: 0;
+  color: var(--p-text-muted-color);
+}
+.modal-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 1.25rem;
+}
 .total {
   font-size: 2rem;
   font-weight: 600;
+}
+.debt {
+  color: var(--p-red-500);
+  font-weight: 600;
+}
+.legend {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+.dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  margin-right: 0.3rem;
+}
+.dot.planned {
+  background: var(--p-blue-500);
+}
+.dot.conducted {
+  background: var(--p-green-500);
+}
+.dot.cancelled {
+  background: var(--p-surface-400);
+}
+</style>
+
+<style>
+/* FullCalendar: события кликабельны */
+.fc-event {
+  cursor: pointer;
 }
 </style>

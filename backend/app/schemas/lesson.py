@@ -42,6 +42,12 @@ class LessonOut(BaseModel):
     homeworks: list[HomeworkOut]
 
 
+class LessonCalendarOut(LessonOut):
+    """Урок для календаря учителя: + имя ученика."""
+
+    student_name: str
+
+
 class LessonCreate(BaseModel):
     scheduled_at: datetime
     topic: str | None = None

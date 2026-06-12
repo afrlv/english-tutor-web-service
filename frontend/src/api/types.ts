@@ -51,6 +51,10 @@ export interface Lesson {
   homeworks: Homework[];
 }
 
+export interface CalendarLesson extends Lesson {
+  student_name: string;
+}
+
 export interface Transaction {
   id: number;
   student_id: number;

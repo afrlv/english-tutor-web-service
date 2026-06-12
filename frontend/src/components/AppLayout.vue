@@ -18,20 +18,18 @@ const showImpersonationBar = computed(
 
 const items = computed(() => {
   const role = auth.user?.role;
-  if (role === "teacher" || role === "superuser") {
-    const base = [
-      { label: "Сегодня", icon: "pi pi-calendar", command: () => router.push("/dashboard") },
+  // Суперюзер настраивает систему: расписание и финансы — зона учителя
+  if (role === "superuser") {
+    return [
+      { label: "Пользователи", icon: "pi pi-cog", command: () => router.push("/admin/users") },
       { label: "Ученики", icon: "pi pi-users", command: () => router.push("/students") },
-      { label: "Финансы", icon: "pi pi-wallet", command: () => router.push("/finance") },
     ];
-    if (role === "superuser") {
-      base.push({
-        label: "Пользователи",
-        icon: "pi pi-cog",
-        command: () => router.push("/admin/users"),
-      });
-    }
-    return base;
+  }
+  if (role === "teacher") {
+    return [
+      { label: "Главная", icon: "pi pi-calendar", command: () => router.push("/dashboard") },
+      { label: "Ученики", icon: "pi pi-users", command: () => router.push("/students") },
+    ];
   }
   if (role === "student") {
     return [{ label: "Мой кабинет", icon: "pi pi-home", command: () => router.push("/cabinet") }];

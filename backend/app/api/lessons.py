@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,6 +12,7 @@ from app.schemas.lesson import (
     HomeworkCreate,
     HomeworkOut,
     HomeworkUpdate,
+    LessonCalendarOut,
     LessonCreate,
     LessonOut,
     LessonUpdate,
@@ -27,6 +30,32 @@ async def get_lesson_or_404(lesson_id: int, db: AsyncSession = Depends(get_db)) 
     if lesson is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Урок не найден")
     return lesson
+
+
+@router.get("/lessons", response_model=list[LessonCalendarOut])
+async def list_all_lessons(
+    date_from: datetime | None = Query(None, alias="from"),
+    date_to: datetime | None = Query(None, alias="to"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Все уроки всех учеников (для календаря), опционально в диапазоне дат."""
+    query = (
+        select(Lesson, User.full_name)
+        .join(Student, Student.id == Lesson.student_id)
+        .join(User, User.id == Student.user_id)
+        .order_by(Lesson.scheduled_at)
+    )
+    if date_from is not None:
+        query = query.where(Lesson.scheduled_at >= date_from)
+    if date_to is not None:
+        query = query.where(Lesson.scheduled_at < date_to)
+    rows = (await db.execute(query)).all()
+    return [
+        LessonCalendarOut(
+            **LessonOut.model_validate(lesson).model_dump(), student_name=name
+        )
+        for lesson, name in rows
+    ]
 
 
 @router.get("/students/{student_id}/lessons", response_model=list[LessonOut])

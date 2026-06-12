@@ -2,6 +2,7 @@ import { api } from "./client";
 import type {
   Balance,
   Cabinet,
+  CalendarLesson,
   ChildCard,
   Comment,
   FinanceSummary,
@@ -68,6 +69,10 @@ export const updateParent = (
 ) => api.patch<Parent>(`/parents/${id}`, data).then((r) => r.data);
 
 // --- lessons (teacher) ---
+export const listAllLessons = (from?: string, to?: string) =>
+  api
+    .get<CalendarLesson[]>("/lessons", { params: { from, to } })
+    .then((r) => r.data);
 export const listLessons = (studentId: number) =>
   api.get<Lesson[]>(`/students/${studentId}/lessons`).then((r) => r.data);
 export const createLesson = (

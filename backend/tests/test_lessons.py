@@ -108,6 +108,32 @@ async def test_duplicate_email_rejected(client, seed_users):
     assert resp.status_code == 409
 
 
+async def test_calendar_lessons_with_range(client, seed_users):
+    student_id = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    base = datetime.now(timezone.utc)
+    await create_lesson(client, student_id, scheduled_at=(base + timedelta(days=1)).isoformat())
+    await create_lesson(client, student_id, scheduled_at=(base + timedelta(days=10)).isoformat())
+
+    all_lessons = (await client.get("/api/lessons")).json()
+    assert len(all_lessons) == 2
+    assert all_lessons[0]["student_name"] == "Тест student"
+
+    # Фильтр по диапазону отсекает дальний урок
+    resp = await client.get(
+        "/api/lessons",
+        params={
+            "from": base.isoformat(),
+            "to": (base + timedelta(days=7)).isoformat(),
+        },
+    )
+    assert len(resp.json()) == 1
+
+    # Ученику календарь учителя недоступен
+    await login(client, "student@test.ru")
+    assert (await client.get("/api/lessons")).status_code == 403
+
+
 async def test_teacher_resets_student_password(client, seed_users):
     student_id = seed_users["student_id"]
     await login(client, "teacher@test.ru")

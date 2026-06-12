@@ -18,7 +18,7 @@ export const router = createRouter({
     {
       path: "/dashboard",
       component: () => import("../pages/teacher/DashboardPage.vue"),
-      meta: { roles: ["teacher", "superuser"] },
+      meta: { roles: ["teacher"] },
     },
     {
       path: "/students",
@@ -30,11 +30,8 @@ export const router = createRouter({
       component: () => import("../pages/teacher/StudentCardPage.vue"),
       meta: { roles: ["teacher", "superuser"] },
     },
-    {
-      path: "/finance",
-      component: () => import("../pages/teacher/FinancePage.vue"),
-      meta: { roles: ["teacher", "superuser"] },
-    },
+    // Финансы переехали на главную учителя
+    { path: "/finance", redirect: "/dashboard" },
     {
       path: "/cabinet",
       component: () => import("../pages/student/CabinetPage.vue"),
