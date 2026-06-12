@@ -13,4 +13,8 @@ def get_email_sender() -> EmailSender:
         from app.emails.console import ConsoleEmailSender
 
         return ConsoleEmailSender()
+    if settings.email_backend == "smtp":
+        from app.emails.smtp import SmtpEmailSender
+
+        return SmtpEmailSender(settings)
     raise ValueError(f"Неизвестный email-бэкенд: {settings.email_backend}")

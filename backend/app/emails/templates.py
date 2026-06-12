@@ -10,6 +10,18 @@ def credentials_email(full_name: str, login: str, password: str) -> tuple[str, s
     return subject, body
 
 
+def reminder_email(
+    full_name: str, when: str, topic: str | None, zoom_link: str | None
+) -> tuple[str, str]:
+    subject = "Напоминание об уроке английского"
+    body = f"Здравствуйте, {full_name}!\n\nНапоминаем: {when} у вас урок английского."
+    if topic:
+        body += f"\nТема: {topic}"
+    if zoom_link:
+        body += f"\nСсылка на занятие: {zoom_link}"
+    return subject, body
+
+
 def digest_email(lines: list[str]) -> tuple[str, str]:
     subject = "Уроки на сегодня"
     if not lines:

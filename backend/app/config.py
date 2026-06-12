@@ -14,7 +14,15 @@ class Settings(BaseSettings):
     teacher_email: str = "teacher@example.com"
     teacher_password: str = "teacher12345"
 
-    email_backend: str = "console"
+    email_backend: str = "console"  # console | smtp
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""  # по умолчанию — smtp_user
+
+    # За сколько часов до урока напоминать ученику
+    reminder_hours: int = 24
 
     scheduler_enabled: bool = False
     digest_hour: int = 7

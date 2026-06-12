@@ -31,6 +31,8 @@ class Lesson(Base, CreatedAtMixin):
         Enum(LessonStatus, name="lesson_status"), default=LessonStatus.planned
     )
     conducted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Когда ученику отправлено напоминание (защита от повторной отправки)
+    reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     homeworks: Mapped[list["Homework"]] = relationship(
         back_populates="lesson", cascade="all, delete-orphan", lazy="selectin"

@@ -73,6 +73,7 @@ def fake_email(monkeypatch) -> FakeEmailSender:
     fake = FakeEmailSender()
     monkeypatch.setattr("app.services.users.get_email_sender", lambda: fake)
     monkeypatch.setattr("app.services.digest.get_email_sender", lambda: fake)
+    monkeypatch.setattr("app.services.reminders.get_email_sender", lambda: fake)
     return fake
 
 
