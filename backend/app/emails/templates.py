@@ -22,6 +22,41 @@ def reminder_email(
     return subject, body
 
 
+def debt_notice_email(
+    parent_name: str, student_name: str, debt: str, lessons_unpaid: int
+) -> tuple[str, str]:
+    subject = "Оплата занятий английским"
+    body = (
+        f"Здравствуйте, {parent_name}!\n\n"
+        f"По занятиям ({student_name}) накопилась задолженность: {debt} ₽"
+        f" — примерно {lessons_unpaid} занятия(ий).\n"
+        f"Пожалуйста, оплатите удобным способом. Детали — в вашем кабинете."
+    )
+    return subject, body
+
+
+def monthly_statement_email(
+    parent_name: str,
+    student_name: str,
+    month_title: str,
+    conducted: int,
+    charged: str,
+    paid: str,
+    balance_line: str,
+) -> tuple[str, str]:
+    subject = f"Занятия английским: итоги за {month_title}"
+    body = (
+        f"Здравствуйте, {parent_name}!\n\n"
+        f"Итоги месяца ({student_name}):\n"
+        f"Проведено занятий: {conducted}\n"
+        f"Начислено: {charged} ₽\n"
+        f"Оплачено: {paid} ₽\n"
+        f"{balance_line}\n\n"
+        f"Подробная история — в вашем кабинете."
+    )
+    return subject, body
+
+
 def digest_email(lines: list[str]) -> tuple[str, str]:
     subject = "Уроки на сегодня"
     if not lines:

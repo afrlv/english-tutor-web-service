@@ -7,6 +7,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.config import get_settings
 from app.db import async_session
 from app.services.digest import send_daily_digest
+from app.services.parent_notices import send_debt_notices, send_monthly_statements
 from app.services.reminders import send_lesson_reminders
 from app.services.schedule import generate_all
 
@@ -28,6 +29,16 @@ async def _reminders_job() -> None:
         await send_lesson_reminders(db)
 
 
+async def _debt_notices_job() -> None:
+    async with async_session() as db:
+        await send_debt_notices(db)
+
+
+async def _statements_job() -> None:
+    async with async_session() as db:
+        await send_monthly_statements(db)
+
+
 def create_scheduler() -> AsyncIOScheduler:
     settings = get_settings()
     scheduler = AsyncIOScheduler(timezone=settings.tz)
@@ -46,6 +57,17 @@ def create_scheduler() -> AsyncIOScheduler:
     # Напоминания ученикам о ближайших уроках
     scheduler.add_job(
         _reminders_job, IntervalTrigger(minutes=15), id="lesson_reminders"
+    )
+    # Письма родителям: долг — ежедневно в 10:00, выписка — 1-го числа в 10:05
+    scheduler.add_job(
+        _debt_notices_job,
+        CronTrigger(hour=10, minute=0, timezone=settings.tz),
+        id="debt_notices",
+    )
+    scheduler.add_job(
+        _statements_job,
+        CronTrigger(day=1, hour=10, minute=5, timezone=settings.tz),
+        id="monthly_statements",
     )
     logger.info("Дайджест запланирован ежедневно на %02d:00 (%s)", settings.digest_hour, settings.tz)
     return scheduler

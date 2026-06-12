@@ -1,6 +1,7 @@
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ForeignKey, Numeric, Text
+from sqlalchemy import DateTime, ForeignKey, Numeric, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin
@@ -16,5 +17,7 @@ class Parent(Base, CreatedAtMixin):
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), unique=True)
     lesson_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))
     recommendations: Mapped[str | None] = mapped_column(Text)
+    # Когда отправлено последнее напоминание о долге (сбрасывается при погашении)
+    debt_notice_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(lazy="joined")
