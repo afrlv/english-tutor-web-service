@@ -55,6 +55,13 @@ export interface CalendarLesson extends Lesson {
   student_name: string;
 }
 
+export interface ScheduleSlot {
+  id: number;
+  student_id: number;
+  weekday: number; // 0=Пн … 6=Вс
+  start_time: string; // "16:00:00"
+}
+
 export interface Transaction {
   id: number;
   student_id: number;

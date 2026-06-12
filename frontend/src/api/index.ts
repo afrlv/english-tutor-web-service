@@ -9,6 +9,7 @@ import type {
   Homework,
   Lesson,
   Parent,
+  ScheduleSlot,
   Student,
   Transaction,
   User,
@@ -91,6 +92,15 @@ export const addHomework = (lessonId: number, description: string) =>
 export const updateHomework = (id: number, data: { description?: string; is_done?: boolean }) =>
   api.patch<Homework>(`/homeworks/${id}`, data).then((r) => r.data);
 export const deleteHomework = (id: number) => api.delete(`/homeworks/${id}`);
+
+// --- повторяющееся расписание (teacher) ---
+export const listSchedule = (studentId: number) =>
+  api.get<ScheduleSlot[]>(`/students/${studentId}/schedule`).then((r) => r.data);
+export const createScheduleSlot = (studentId: number, weekday: number, start_time: string) =>
+  api
+    .post<ScheduleSlot>(`/students/${studentId}/schedule`, { weekday, start_time })
+    .then((r) => r.data);
+export const deleteScheduleSlot = (slotId: number) => api.delete(`/schedule/${slotId}`);
 
 // --- comments ---
 export const listComments = (studentId: number) =>

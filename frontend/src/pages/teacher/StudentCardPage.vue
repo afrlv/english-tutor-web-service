@@ -4,11 +4,14 @@ import { useToast } from "primevue/usetoast";
 import Button from "primevue/button";
 import Card from "primevue/card";
 import Checkbox from "primevue/checkbox";
+import Chip from "primevue/chip";
 import Column from "primevue/column";
 import DataTable from "primevue/datatable";
+import DatePicker from "primevue/datepicker";
 import Dialog from "primevue/dialog";
 import InputNumber from "primevue/inputnumber";
 import InputText from "primevue/inputtext";
+import Select from "primevue/select";
 import Tab from "primevue/tab";
 import TabList from "primevue/tablist";
 import TabPanel from "primevue/tabpanel";
@@ -26,12 +29,15 @@ import {
   conductLesson,
   createLesson,
   createParent,
+  createScheduleSlot,
   deleteHomework,
   deleteLesson,
+  deleteScheduleSlot,
   getStudent,
   listComments,
   listLessons,
   listParents,
+  listSchedule,
   listTransactions,
   revertLesson,
   savePrivateNote,
@@ -40,7 +46,14 @@ import {
   updateLesson,
   updateParent,
 } from "../../api";
-import type { Comment, Lesson, Parent, Student, Transaction } from "../../api/types";
+import type {
+  Comment,
+  Lesson,
+  Parent,
+  ScheduleSlot,
+  Student,
+  Transaction,
+} from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
@@ -59,6 +72,12 @@ const transactions = ref<Transaction[]>([]);
 // уроки
 const lessonDialogOpen = ref(false);
 const editingLesson = ref<Lesson | null>(null);
+// повторяющееся расписание
+const slots = ref<ScheduleSlot[]>([]);
+const newSlotDay = ref<number | null>(null);
+const newSlotTime = ref<Date | null>(null);
+const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const weekdayOptions = WEEKDAYS.map((label, value) => ({ label, value }));
 // ДЗ
 const homeworkLesson = ref<Lesson | null>(null);
 const homeworkText = ref("");
@@ -81,12 +100,14 @@ function showError(e: unknown, fallback: string) {
 async function loadAll() {
   student.value = await getStudent(studentId);
   privateNote.value = student.value.teacher_private_note ?? "";
-  [lessons.value, parents.value, comments.value, transactions.value] = await Promise.all([
-    listLessons(studentId),
-    listParents(studentId),
-    listComments(studentId),
-    listTransactions(studentId),
-  ]);
+  [lessons.value, parents.value, comments.value, transactions.value, slots.value] =
+    await Promise.all([
+      listLessons(studentId),
+      listParents(studentId),
+      listComments(studentId),
+      listTransactions(studentId),
+      listSchedule(studentId),
+    ]);
   const p = parents.value[0];
   if (p) {
     parentForm.value = {
@@ -99,6 +120,52 @@ async function loadAll() {
 }
 
 onMounted(loadAll);
+
+// --- повторяющееся расписание ---
+
+async function onAddSlot() {
+  if (newSlotDay.value === null || !newSlotTime.value) return;
+  const hh = String(newSlotTime.value.getHours()).padStart(2, "0");
+  const mm = String(newSlotTime.value.getMinutes()).padStart(2, "0");
+  try {
+    await createScheduleSlot(studentId, newSlotDay.value, `${hh}:${mm}`);
+    newSlotDay.value = null;
+    newSlotTime.value = null;
+    [slots.value, lessons.value] = await Promise.all([
+      listSchedule(studentId),
+      listLessons(studentId),
+    ]);
+    toast.add({
+      severity: "success",
+      summary: "Слот добавлен",
+      detail: "Уроки созданы на месяц вперёд",
+      life: 4000,
+    });
+  } catch (e) {
+    showError(e, "Не удалось добавить слот");
+  }
+}
+
+async function onRemoveSlot(slot: ScheduleSlot) {
+  confirm.require({
+    message: `Удалить слот ${WEEKDAYS[slot.weekday]} ${slot.start_time.slice(0, 5)}? Будущие незатронутые уроки серии будут удалены.`,
+    header: "Подтверждение",
+    acceptLabel: "Удалить",
+    rejectLabel: "Отмена",
+    acceptProps: { severity: "danger" },
+    accept: async () => {
+      try {
+        await deleteScheduleSlot(slot.id);
+        [slots.value, lessons.value] = await Promise.all([
+          listSchedule(studentId),
+          listLessons(studentId),
+        ]);
+      } catch (e) {
+        showError(e, "Не удалось удалить слот");
+      }
+    },
+  });
+}
 
 // --- уроки ---
 
@@ -291,6 +358,41 @@ async function onSetPassword() {
           <TabPanels>
             <!-- Уроки + ДЗ -->
             <TabPanel value="lessons">
+              <div class="slots-box">
+                <span class="slots-label">Регулярное расписание:</span>
+                <Chip
+                  v-for="s in slots"
+                  :key="s.id"
+                  :label="`${WEEKDAYS[s.weekday]} ${s.start_time.slice(0, 5)}`"
+                  removable
+                  @remove="onRemoveSlot(s)"
+                />
+                <span v-if="!slots.length" class="slots-empty">нет</span>
+                <Select
+                  v-model="newSlotDay"
+                  :options="weekdayOptions"
+                  option-label="label"
+                  option-value="value"
+                  placeholder="День"
+                  size="small"
+                  class="slot-day"
+                />
+                <DatePicker
+                  v-model="newSlotTime"
+                  time-only
+                  hour-format="24"
+                  placeholder="Время"
+                  size="small"
+                  class="slot-time"
+                />
+                <Button
+                  label="Добавить"
+                  icon="pi pi-plus"
+                  size="small"
+                  :disabled="newSlotDay === null || !newSlotTime"
+                  @click="onAddSlot"
+                />
+              </div>
               <Button label="Новый урок" icon="pi pi-plus" class="mb" @click="openCreateLesson" />
               <DataTable :value="lessons" data-key="id">
                 <template #empty>Уроков пока нет</template>
@@ -523,6 +625,31 @@ label {
 }
 .mb {
   margin-bottom: 1rem;
+}
+.slots-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--p-surface-100);
+  border-radius: 8px;
+}
+.slots-label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.slots-empty {
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
+}
+.slot-day {
+  width: 7rem;
+  margin-left: auto;
+}
+.slot-time {
+  width: 7rem;
 }
 .mt {
   margin-top: 1rem;

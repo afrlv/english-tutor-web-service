@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.students import get_student_or_404
 from app.db import get_db
 from app.deps import require_roles
-from app.models import Homework, Lesson, Role, Student, User
+from app.models import Homework, Lesson, Role, ScheduleSlot, Student, User
 from app.schemas.lesson import (
     HomeworkCreate,
     HomeworkOut,
@@ -17,7 +17,8 @@ from app.schemas.lesson import (
     LessonOut,
     LessonUpdate,
 )
-from app.services import finance
+from app.schemas.schedule import ScheduleSlotCreate, ScheduleSlotOut
+from app.services import finance, schedule
 
 router = APIRouter(
     tags=["lessons"],
@@ -127,6 +128,62 @@ async def revert_lesson(
 ):
     await finance.revert_lesson(db, lesson)
     return lesson
+
+
+# --- Повторяющееся расписание ---
+
+
+@router.get("/students/{student_id}/schedule", response_model=list[ScheduleSlotOut])
+async def list_schedule(
+    student: Student = Depends(get_student_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    return (
+        await db.scalars(
+            select(ScheduleSlot)
+            .where(ScheduleSlot.student_id == student.id, ScheduleSlot.is_active.is_(True))
+            .order_by(ScheduleSlot.weekday, ScheduleSlot.start_time)
+        )
+    ).all()
+
+
+@router.post(
+    "/students/{student_id}/schedule",
+    response_model=ScheduleSlotOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_schedule_slot(
+    data: ScheduleSlotCreate,
+    student: Student = Depends(get_student_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    duplicate = await db.scalar(
+        select(ScheduleSlot).where(
+            ScheduleSlot.student_id == student.id,
+            ScheduleSlot.weekday == data.weekday,
+            ScheduleSlot.start_time == data.start_time,
+            ScheduleSlot.is_active.is_(True),
+        )
+    )
+    if duplicate is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Такой слот уже есть")
+    slot = ScheduleSlot(
+        student_id=student.id, weekday=data.weekday, start_time=data.start_time
+    )
+    db.add(slot)
+    await db.flush()
+    await schedule.generate_lessons_for_slot(db, slot)
+    await db.commit()
+    await db.refresh(slot)
+    return slot
+
+
+@router.delete("/schedule/{slot_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_schedule_slot(slot_id: int, db: AsyncSession = Depends(get_db)):
+    slot = await db.get(ScheduleSlot, slot_id)
+    if slot is None or not slot.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Слот не найден")
+    await schedule.deactivate_slot(db, slot)
 
 
 # --- Домашние задания ---

@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     scheduler_enabled: bool = False
     digest_hour: int = 7
     tz: str = "Europe/Moscow"
+    # Горизонт материализации уроков из повторяющихся слотов
+    generate_weeks: int = 4
 
     media_dir: str = "media"
 

@@ -33,6 +33,7 @@ class LessonOut(BaseModel):
 
     id: int
     student_id: int
+    slot_id: int | None = None
     scheduled_at: datetime
     topic: str | None
     zoom_link: str | None
