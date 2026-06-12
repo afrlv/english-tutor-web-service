@@ -6,9 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.emails.sender import get_email_sender
 from app.emails.templates import reminder_email
 from app.models import Lesson, LessonStatus, Student, User
+from app.services.mailer import send_email
 
 logger = logging.getLogger("app.reminders")
 
@@ -54,7 +54,6 @@ async def send_lesson_reminders(db: AsyncSession) -> int:
         )
     ).all()
 
-    sender = get_email_sender()
     sent = 0
     for lesson, student_user in rows:
         at_local = lesson.scheduled_at.astimezone(tz)
@@ -64,9 +63,10 @@ async def send_lesson_reminders(db: AsyncSession) -> int:
             lesson.topic,
             lesson.zoom_link,
         )
-        await sender.send(student_user.email, subject, body)
-        lesson.reminder_sent_at = now
-        sent += 1
+        # При ошибке отправки отметку не ставим — джоба повторит через 15 минут
+        if await send_email(db, student_user.email, subject, body):
+            lesson.reminder_sent_at = now
+            sent += 1
     await db.commit()
     if sent:
         logger.info("Отправлено напоминаний об уроках: %d", sent)

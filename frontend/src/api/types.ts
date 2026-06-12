@@ -55,6 +55,24 @@ export interface CalendarLesson extends Lesson {
   student_name: string;
 }
 
+export interface EmailSettings {
+  backend: "console" | "smtp";
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_from: string;
+  password_set: boolean;
+}
+
+export interface EmailLogEntry {
+  id: number;
+  to_email: string;
+  subject: string;
+  status: "sent" | "error";
+  error: string | null;
+  created_at: string;
+}
+
 export interface ScheduleSlot {
   id: number;
   student_id: number;

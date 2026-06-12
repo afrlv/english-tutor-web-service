@@ -5,6 +5,8 @@ import type {
   CalendarLesson,
   ChildCard,
   Comment,
+  EmailLogEntry,
+  EmailSettings,
   FinanceSummary,
   Homework,
   Lesson,
@@ -45,6 +47,20 @@ export const adminUpdateUser = (id: number, data: Partial<User>) =>
 export const adminSetPassword = (id: number, password: string) =>
   api.post(`/admin/users/${id}/password`, { password });
 export const adminSendDigest = () => api.post("/admin/digest/send-now");
+export const getEmailSettings = () =>
+  api.get<EmailSettings>("/admin/email-settings").then((r) => r.data);
+export const saveEmailSettings = (data: {
+  backend: string;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user: string;
+  smtp_from: string;
+  smtp_password: string | null;
+}) => api.put<EmailSettings>("/admin/email-settings", data).then((r) => r.data);
+export const sendTestEmail = () =>
+  api.post<{ ok: boolean }>("/admin/email-settings/test").then((r) => r.data);
+export const listEmailLog = () =>
+  api.get<EmailLogEntry[]>("/admin/email-log").then((r) => r.data);
 
 // --- students (teacher) ---
 export const listStudents = () => api.get<Student[]>("/students").then((r) => r.data);

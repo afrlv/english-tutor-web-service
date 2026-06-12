@@ -6,9 +6,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.emails.sender import get_email_sender
 from app.emails.templates import digest_email
 from app.models import Lesson, LessonStatus, Role, Student, User
+from app.services.mailer import send_email
 
 logger = logging.getLogger("app.digest")
 
@@ -53,4 +53,5 @@ async def send_daily_digest(db: AsyncSession) -> None:
         return
     lines = await compose_digest_lines(db)
     subject, body = digest_email(lines)
-    await get_email_sender().send(teacher.email, subject, body)
+    await send_email(db, teacher.email, subject, body)
+    await db.commit()

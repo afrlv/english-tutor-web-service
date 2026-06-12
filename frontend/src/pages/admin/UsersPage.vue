@@ -14,7 +14,6 @@ import { onMounted, ref } from "vue";
 import {
   adminCreateUser,
   adminListUsers,
-  adminSendDigest,
   adminSetPassword,
   adminUpdateUser,
 } from "../../api";
@@ -126,14 +125,6 @@ async function setPassword() {
   }
 }
 
-async function sendDigest() {
-  try {
-    await adminSendDigest();
-    toast.add({ severity: "success", summary: "Дайджест отправлен", life: 3000 });
-  } catch (e) {
-    showError(e, "Не удалось отправить дайджест");
-  }
-}
 </script>
 
 <template>
@@ -142,15 +133,7 @@ async function sendDigest() {
       <template #title>
         <div class="header">
           Пользователи
-          <div class="header-actions">
-            <Button
-              label="Дайджест сейчас"
-              icon="pi pi-envelope"
-              severity="secondary"
-              @click="sendDigest"
-            />
-            <Button label="Создать" icon="pi pi-plus" @click="createOpen = true" />
-          </div>
+          <Button label="Создать" icon="pi pi-plus" @click="createOpen = true" />
         </div>
       </template>
       <template #content>

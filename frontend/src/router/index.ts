@@ -52,6 +52,11 @@ export const router = createRouter({
       component: () => import("../pages/admin/UsersPage.vue"),
       meta: { roles: ["superuser"] },
     },
+    {
+      path: "/admin/email",
+      component: () => import("../pages/admin/EmailPage.vue"),
+      meta: { roles: ["superuser"] },
+    },
     { path: "/", redirect: "/login" },
     { path: "/:pathMatch(.*)*", redirect: "/login" },
   ],

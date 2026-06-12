@@ -2,8 +2,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.emails.sender import get_email_sender
 from app.emails.templates import credentials_email
+from app.services.mailer import send_email
 from app.models import Role, User
 from app.security import generate_password, hash_password
 
@@ -57,5 +57,5 @@ async def create_user_with_credentials_email(
         db, email=email, full_name=full_name, role=role, password=password
     )
     subject, body = credentials_email(full_name, user.login, password)
-    await get_email_sender().send(email, subject, body)
+    await send_email(db, email, subject, body)
     return user

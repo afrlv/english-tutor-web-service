@@ -2,11 +2,13 @@ from datetime import datetime, timedelta
 
 from zoneinfo import ZoneInfo
 
+from app.config import get_settings
+
 from app.services.digest import compose_digest_lines
 from tests.conftest import TestSession, login
 from tests.test_lessons import create_lesson
 
-TZ = ZoneInfo("Europe/Moscow")
+TZ = ZoneInfo(get_settings().tz)
 
 
 async def test_digest_lists_today_lessons(client, seed_users):

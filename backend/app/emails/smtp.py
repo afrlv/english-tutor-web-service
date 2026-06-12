@@ -3,7 +3,7 @@ from email.message import EmailMessage
 
 import aiosmtplib
 
-from app.config import Settings
+from app.emails.sender import EmailConfig
 
 logger = logging.getLogger("app.emails")
 
@@ -14,7 +14,7 @@ class SmtpEmailSender:
     Порт 465 — implicit TLS, иначе STARTTLS.
     """
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: EmailConfig):
         self._settings = settings
 
     async def send(self, to: str, subject: str, body: str) -> None:

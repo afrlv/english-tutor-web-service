@@ -2,13 +2,14 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from app.config import get_settings
+
 from app.emails.smtp import SmtpEmailSender
-from app.emails.sender import get_email_sender
+from app.emails.sender import EmailConfig, build_sender
 from app.services.reminders import send_lesson_reminders
 from tests.conftest import TestSession, login
 from tests.test_lessons import create_lesson
 
-TZ = ZoneInfo("Europe/Moscow")
+TZ = ZoneInfo(get_settings().tz)
 
 
 async def run_reminders() -> int:
@@ -52,12 +53,9 @@ async def test_reminder_respects_window_and_status(client, seed_users, fake_emai
     assert far is not None  # просто фиксация, что урок создан
 
 
-async def test_smtp_backend_selected(monkeypatch):
-    settings = get_settings()
-    monkeypatch.setattr(settings, "email_backend", "smtp")
-    monkeypatch.setattr(settings, "smtp_host", "smtp.example.com")
-    sender = get_email_sender()
-    assert isinstance(sender, SmtpEmailSender)
+async def test_smtp_backend_selected():
+    cfg = EmailConfig(backend="smtp", smtp_host="smtp.example.com")
+    assert isinstance(build_sender(cfg), SmtpEmailSender)
 
 
 async def test_smtp_message_composition(monkeypatch):
@@ -69,12 +67,14 @@ async def test_smtp_message_composition(monkeypatch):
         captured["kwargs"] = kwargs
 
     monkeypatch.setattr("app.emails.smtp.aiosmtplib.send", fake_send)
-    settings = get_settings()
-    monkeypatch.setattr(settings, "smtp_host", "smtp.example.com")
-    monkeypatch.setattr(settings, "smtp_user", "tutor@example.com")
-    monkeypatch.setattr(settings, "smtp_password", "secret")
+    cfg = EmailConfig(
+        backend="smtp",
+        smtp_host="smtp.example.com",
+        smtp_user="tutor@example.com",
+        smtp_password="secret",
+    )
 
-    await SmtpEmailSender(settings).send("to@example.com", "Тест", "Привет!")
+    await SmtpEmailSender(cfg).send("to@example.com", "Тест", "Привет!")
 
     msg = captured["msg"]
     assert msg["To"] == "to@example.com"

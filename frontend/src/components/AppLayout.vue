@@ -23,6 +23,7 @@ const items = computed(() => {
     return [
       { label: "Пользователи", icon: "pi pi-cog", command: () => router.push("/admin/users") },
       { label: "Ученики", icon: "pi pi-users", command: () => router.push("/students") },
+      { label: "Почта", icon: "pi pi-envelope", command: () => router.push("/admin/email") },
     ];
   }
   if (role === "teacher") {

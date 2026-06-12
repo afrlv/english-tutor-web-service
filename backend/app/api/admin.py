@@ -3,11 +3,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
-from app.deps import require_roles
-from app.models import Role, User
+from app.deps import get_current_user, require_roles
+from app.models import EmailLog, Role, User
+from app.schemas.email import EmailLogOut, EmailSettingsIn, EmailSettingsOut
 from app.schemas.user import PasswordSet, UserCreate, UserOut, UserUpdate
 from app.security import hash_password
 from app.services.digest import send_daily_digest
+from app.services.email_settings import get_email_config, get_or_create_row
+from app.services.mailer import send_email
 from app.services.users import create_user, ensure_email_free, ensure_login_free
 
 router = APIRouter(
@@ -83,3 +86,65 @@ async def set_password(
 async def send_digest_now(db: AsyncSession = Depends(get_db)):
     await send_daily_digest(db)
     return {"detail": "Дайджест отправлен"}
+
+
+# --- Настройки почты и журнал отправки ---
+
+
+def _settings_out(cfg) -> EmailSettingsOut:
+    return EmailSettingsOut(
+        backend=cfg.backend,
+        smtp_host=cfg.smtp_host,
+        smtp_port=cfg.smtp_port,
+        smtp_user=cfg.smtp_user,
+        smtp_from=cfg.smtp_from,
+        password_set=bool(cfg.smtp_password),
+    )
+
+
+@router.get("/email-settings", response_model=EmailSettingsOut)
+async def get_email_settings(db: AsyncSession = Depends(get_db)):
+    return _settings_out(await get_email_config(db))
+
+
+@router.put("/email-settings", response_model=EmailSettingsOut)
+async def update_email_settings(
+    data: EmailSettingsIn, db: AsyncSession = Depends(get_db)
+):
+    row = await get_or_create_row(db)
+    row.backend = data.backend
+    row.smtp_host = data.smtp_host
+    row.smtp_port = data.smtp_port
+    row.smtp_user = data.smtp_user
+    row.smtp_from = data.smtp_from
+    if data.smtp_password:
+        row.smtp_password = data.smtp_password
+    await db.commit()
+    return _settings_out(await get_email_config(db))
+
+
+@router.post("/email-settings/test")
+async def send_test_email(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Тестовое письмо на почту администратора; результат виден в журнале."""
+    ok = await send_email(
+        db,
+        user.email,
+        "Проверка отправки почты",
+        "Это тестовое письмо из кабинета репетитора. Если вы его читаете — отправка настроена.",
+    )
+    await db.commit()
+    return {"ok": ok}
+
+
+@router.get("/email-log", response_model=list[EmailLogOut])
+async def email_log(limit: int = 100, db: AsyncSession = Depends(get_db)):
+    return (
+        await db.scalars(
+            select(EmailLog)
+            .order_by(EmailLog.created_at.desc(), EmailLog.id.desc())
+            .limit(min(limit, 500))
+        )
+    ).all()

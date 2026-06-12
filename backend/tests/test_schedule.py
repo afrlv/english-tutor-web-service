@@ -1,9 +1,11 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from app.config import get_settings
+
 from tests.conftest import TestSession, login
 
-TZ = ZoneInfo("Europe/Moscow")
+TZ = ZoneInfo(get_settings().tz)
 
 
 def tomorrow_slot() -> dict:

@@ -71,9 +71,8 @@ class FakeEmailSender:
 @pytest.fixture(autouse=True)
 def fake_email(monkeypatch) -> FakeEmailSender:
     fake = FakeEmailSender()
-    monkeypatch.setattr("app.services.users.get_email_sender", lambda: fake)
-    monkeypatch.setattr("app.services.digest.get_email_sender", lambda: fake)
-    monkeypatch.setattr("app.services.reminders.get_email_sender", lambda: fake)
+    # Все письма идут через services.mailer — подменяем сборку отправителя
+    monkeypatch.setattr("app.services.mailer.build_sender", lambda cfg: fake)
     return fake
 
 
