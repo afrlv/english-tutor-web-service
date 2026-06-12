@@ -48,6 +48,7 @@ export interface Homework {
   is_done: boolean;
   student_answer: string | null;
   checked_at: string | null;
+  grade: number | null;
   attachments: HomeworkAttachment[];
   created_at: string;
 }

@@ -368,8 +368,15 @@ async function onToggleHomework(id: number, is_done: boolean) {
   lessons.value = await listLessons(studentId);
 }
 
-async function onToggleChecked(id: number, checked: boolean) {
-  await updateHomework(id, { is_checked: checked });
+const gradeOptions = [2, 3, 4, 5].map((g) => ({ label: String(g), value: g }));
+
+async function onGradeChange(id: number, grade: number | null) {
+  // Выбор оценки = проверено; очистка — снимает проверку
+  if (grade === null) {
+    await updateHomework(id, { is_checked: false });
+  } else {
+    await updateHomework(id, { grade });
+  }
   lessons.value = await listLessons(studentId);
 }
 
@@ -581,14 +588,17 @@ async function onSetPassword() {
                           @update:model-value="(v: boolean) => onToggleHomework(hw.id, v)"
                         />
                         <span :class="{ done: hw.is_done }">{{ hw.description }}</span>
-                        <Button
-                          v-tooltip="hw.checked_at ? 'Проверено — снять отметку' : 'Отметить проверенным'"
-                          :icon="hw.checked_at ? 'pi pi-verified' : 'pi pi-check-circle'"
-                          :severity="hw.checked_at ? 'success' : 'secondary'"
-                          text
-                          rounded
+                        <Select
+                          v-tooltip="'Оценка (выбор = проверено)'"
+                          :model-value="hw.grade"
+                          :options="gradeOptions"
+                          option-label="label"
+                          option-value="value"
+                          placeholder="Оценка"
+                          show-clear
                           size="small"
-                          @click="onToggleChecked(hw.id, !hw.checked_at)"
+                          class="grade-select"
+                          @update:model-value="(v: number | null) => onGradeChange(hw.id, v)"
                         />
                         <Button
                           v-tooltip="'Прикрепить файл'"
@@ -951,6 +961,9 @@ label {
 }
 .hw-block {
   margin-bottom: 0.5rem;
+}
+.grade-select {
+  width: 6.5rem;
 }
 .hw-answer {
   margin: 0.25rem 0 0;

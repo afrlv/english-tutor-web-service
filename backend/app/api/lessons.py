@@ -271,9 +271,17 @@ async def update_homework(
     db: AsyncSession = Depends(get_db),
 ):
     updates = data.model_dump(exclude_unset=True)
+    if "grade" in updates:
+        grade = updates.pop("grade")
+        homework.grade = grade
+        # Оценка = проверено; явный сброс оценки оставляет отметку как есть
+        if grade is not None:
+            homework.checked_at = datetime.now(timezone.utc)
     if "is_checked" in updates:
         checked = updates.pop("is_checked")
         homework.checked_at = datetime.now(timezone.utc) if checked else None
+        if not checked:
+            homework.grade = None
     for field, value in updates.items():
         setattr(homework, field, value)
     await db.commit()

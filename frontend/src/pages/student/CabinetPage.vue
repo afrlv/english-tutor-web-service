@@ -158,7 +158,12 @@ async function onAddComment() {
                     @update:model-value="(v: boolean) => onToggleHomework(hw.id, v)"
                   />
                   <span :class="{ done: hw.is_done }">{{ hw.description }}</span>
-                  <Tag v-if="hw.checked_at" value="Проверено" severity="success" />
+                  <Tag
+                    v-if="hw.grade"
+                    :value="`Оценка: ${hw.grade}`"
+                    :severity="hw.grade >= 4 ? 'success' : hw.grade === 3 ? 'warn' : 'danger'"
+                  />
+                  <Tag v-else-if="hw.checked_at" value="Проверено" severity="success" />
                 </div>
                 <AttachmentList :attachments="hw.attachments" />
                 <p v-if="hw.student_answer && answerDrafts[hw.id] === undefined" class="answer">

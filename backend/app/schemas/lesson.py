@@ -30,6 +30,7 @@ class HomeworkOut(BaseModel):
     is_done: bool
     student_answer: str | None = None
     checked_at: datetime | None = None
+    grade: int | None = None
     attachments: list[AttachmentOut] = []
     created_at: datetime
 
@@ -41,8 +42,10 @@ class HomeworkCreate(BaseModel):
 class HomeworkUpdate(BaseModel):
     description: str | None = None
     is_done: bool | None = None
-    # Отметка учителя «проверено» (true → ставится, false → снимается)
+    # Отметка учителя «проверено» (true → ставится, false → снимается вместе с оценкой)
     is_checked: bool | None = None
+    # Оценка 2–5; выставление автоматически отмечает работу проверенной
+    grade: int | None = Field(default=None, ge=2, le=5)
 
 
 class HomeworkStudentIn(BaseModel):

@@ -77,6 +77,55 @@ async def test_student_answer_and_teacher_check(client, seed_users):
     assert resp.json()["checked_at"] is None
 
 
+async def test_grade_sets_checked(client, seed_users):
+    sid = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    hw = await create_homework(client, sid)
+
+    # Оценка автоматически отмечает работу проверенной
+    resp = await client.patch(f"/api/homeworks/{hw['id']}", json={"grade": 5})
+    body = resp.json()
+    assert body["grade"] == 5
+    assert body["checked_at"] is not None
+
+    # Оценку можно изменить
+    resp = await client.patch(f"/api/homeworks/{hw['id']}", json={"grade": 4})
+    assert resp.json()["grade"] == 4
+
+    # Снятие проверки очищает оценку
+    resp = await client.patch(f"/api/homeworks/{hw['id']}", json={"is_checked": False})
+    body = resp.json()
+    assert body["checked_at"] is None
+    assert body["grade"] is None
+
+
+async def test_grade_bounds(client, seed_users):
+    sid = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    hw = await create_homework(client, sid)
+    for bad in [1, 6, 0]:
+        resp = await client.patch(f"/api/homeworks/{hw['id']}", json={"grade": bad})
+        assert resp.status_code == 422, bad
+
+
+async def test_student_sees_grade_but_cannot_set(client, seed_users):
+    sid = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    hw = await create_homework(client, sid)
+    await client.patch(f"/api/homeworks/{hw['id']}", json={"grade": 5})
+
+    await login(client, "student@test.ru")
+    homeworks = (await client.get("/api/me/homeworks")).json()
+    assert homeworks[0]["grade"] == 5
+
+    # Поле grade в схеме ученика игнорируется
+    resp = await client.patch(
+        f"/api/me/homeworks/{hw['id']}", json={"grade": 2, "is_done": True}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["grade"] == 5
+
+
 async def test_student_cannot_touch_attachments(client, seed_users):
     sid = seed_users["student_id"]
     await login(client, "teacher@test.ru")

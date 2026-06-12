@@ -130,7 +130,7 @@ export const addHomework = (lessonId: number, description: string) =>
   api.post<Homework>(`/lessons/${lessonId}/homeworks`, { description }).then((r) => r.data);
 export const updateHomework = (
   id: number,
-  data: { description?: string; is_done?: boolean; is_checked?: boolean },
+  data: { description?: string; is_done?: boolean; is_checked?: boolean; grade?: number },
 ) => api.patch<Homework>(`/homeworks/${id}`, data).then((r) => r.data);
 export const deleteHomework = (id: number) => api.delete(`/homeworks/${id}`);
 export const uploadHomeworkFile = (homeworkId: number, file: File) => {
