@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import CancellationKind, LessonStatus
 
@@ -59,6 +59,8 @@ class LessonOut(BaseModel):
     student_id: int
     slot_id: int | None = None
     scheduled_at: datetime
+    duration_minutes: int = 60
+    price: Decimal | None = None
     topic: str | None
     zoom_link: str | None
     recommendation: str | None
@@ -78,6 +80,8 @@ class LessonCalendarOut(LessonOut):
 
 class LessonCreate(BaseModel):
     scheduled_at: datetime
+    duration_minutes: int = Field(default=60, ge=15, le=240)
+    price: Decimal | None = Field(default=None, ge=0)
     topic: str | None = None
     zoom_link: str | None = None
     recommendation: str | None = None
@@ -86,6 +90,8 @@ class LessonCreate(BaseModel):
 class LessonUpdate(BaseModel):
     # Статус меняется только явными действиями: conduct/revert/cancel/restore
     scheduled_at: datetime | None = None
+    duration_minutes: int | None = Field(default=None, ge=15, le=240)
+    price: Decimal | None = Field(default=None, ge=0)
     topic: str | None = None
     zoom_link: str | None = None
     recommendation: str | None = None

@@ -56,6 +56,8 @@ export interface Lesson {
   id: number;
   student_id: number;
   scheduled_at: string;
+  duration_minutes: number;
+  price: string | null;
   topic: string | null;
   zoom_link: string | null;
   recommendation: string | null;

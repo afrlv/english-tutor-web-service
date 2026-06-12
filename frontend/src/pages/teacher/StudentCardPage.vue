@@ -37,6 +37,7 @@ import {
   deleteLesson,
   deleteScheduleSlot,
   getStudent,
+  type LessonInput,
   listComments,
   listLessons,
   listParents,
@@ -212,12 +213,7 @@ function openEditLesson(lesson: Lesson) {
   lessonDialogOpen.value = true;
 }
 
-async function saveLesson(data: {
-  scheduled_at: string;
-  topic?: string;
-  zoom_link?: string;
-  recommendation?: string;
-}) {
+async function saveLesson(data: LessonInput) {
   try {
     if (editingLesson.value) {
       await updateLesson(editingLesson.value.id, data);

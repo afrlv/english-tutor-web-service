@@ -93,11 +93,18 @@ export const listAllLessons = (from?: string, to?: string) =>
     .then((r) => r.data);
 export const listLessons = (studentId: number) =>
   api.get<Lesson[]>(`/students/${studentId}/lessons`).then((r) => r.data);
-export const createLesson = (
-  studentId: number,
-  data: { scheduled_at: string; topic?: string; zoom_link?: string; recommendation?: string },
-) => api.post<Lesson>(`/students/${studentId}/lessons`, data).then((r) => r.data);
-export const updateLesson = (id: number, data: Partial<Lesson>) =>
+export interface LessonInput {
+  scheduled_at: string;
+  duration_minutes?: number;
+  price?: string | null;
+  topic?: string;
+  zoom_link?: string;
+  recommendation?: string;
+}
+
+export const createLesson = (studentId: number, data: LessonInput) =>
+  api.post<Lesson>(`/students/${studentId}/lessons`, data).then((r) => r.data);
+export const updateLesson = (id: number, data: Partial<Lesson> | LessonInput) =>
   api.patch<Lesson>(`/lessons/${id}`, data).then((r) => r.data);
 export const deleteLesson = (id: number) => api.delete(`/lessons/${id}`);
 export const conductLesson = (id: number) =>

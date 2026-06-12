@@ -21,6 +21,7 @@ import {
   createLesson,
   deleteLesson,
   financeSummary,
+  type LessonInput,
   listAllLessons,
   listStudents,
   restoreLesson,
@@ -81,6 +82,9 @@ const calendarOptions = ref<CalendarOptions>({
           id: String(l.id),
           title: l.topic ? `${l.student_name}: ${l.topic}` : l.student_name,
           start: l.scheduled_at,
+          end: new Date(
+            new Date(l.scheduled_at).getTime() + l.duration_minutes * 60_000,
+          ).toISOString(),
           color: statusColors[l.status],
           extendedProps: { lesson: l },
         })),
@@ -89,9 +93,6 @@ const calendarOptions = ref<CalendarOptions>({
       failure(e as Error);
     }
   },
-  // Урок — час по умолчанию (длительность не храним)
-  defaultTimedEventDuration: "01:00",
-  forceEventDuration: true,
   eventClick: (arg: EventClickArg) => {
     selectedLesson.value = arg.event.extendedProps.lesson as CalendarLesson;
   },
@@ -127,10 +128,7 @@ async function refresh() {
   summary.value = await financeSummary();
 }
 
-async function saveLesson(
-  data: { scheduled_at: string; topic?: string; zoom_link?: string; recommendation?: string },
-  studentId: number | null,
-) {
+async function saveLesson(data: LessonInput, studentId: number | null) {
   try {
     if (editingLesson.value) {
       await updateLesson(editingLesson.value.id, data);
