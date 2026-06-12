@@ -47,7 +47,7 @@ async def test_reminder_respects_window_and_status(client, seed_users, fake_emai
     far = await create_lesson(client, sid, scheduled_at=(now + timedelta(hours=48)).isoformat())
     # В окне, но отменён
     cancelled = await create_lesson(client, sid, scheduled_at=(now + timedelta(hours=2)).isoformat())
-    await client.patch(f"/api/lessons/{cancelled['id']}", json={"status": "cancelled"})
+    await client.post(f"/api/lessons/{cancelled['id']}/cancel", json={"kind": "teacher"})
 
     assert await run_reminders() == 0
     assert far is not None  # просто фиксация, что урок создан

@@ -13,6 +13,7 @@ from app.schemas.lesson import (
     HomeworkOut,
     HomeworkUpdate,
     LessonCalendarOut,
+    LessonCancelIn,
     LessonCreate,
     LessonOut,
     LessonUpdate,
@@ -96,7 +97,15 @@ async def update_lesson(
     lesson: Lesson = Depends(get_lesson_or_404),
     db: AsyncSession = Depends(get_db),
 ):
-    for field, value in data.model_dump(exclude_unset=True).items():
+    updates = data.model_dump(exclude_unset=True)
+    # Перенос: запоминаем исходное время (только первое — «откуда перенесли»)
+    if (
+        "scheduled_at" in updates
+        and updates["scheduled_at"] != lesson.scheduled_at
+        and lesson.rescheduled_from is None
+    ):
+        lesson.rescheduled_from = lesson.scheduled_at
+    for field, value in updates.items():
         setattr(lesson, field, value)
     await db.commit()
     return lesson
@@ -127,6 +136,33 @@ async def revert_lesson(
     db: AsyncSession = Depends(get_db),
 ):
     await finance.revert_lesson(db, lesson)
+    return lesson
+
+
+@router.post("/lessons/{lesson_id}/cancel", response_model=LessonOut)
+async def cancel_lesson(
+    data: LessonCancelIn,
+    lesson: Lesson = Depends(get_lesson_or_404),
+    user: User = Depends(require_roles(Role.teacher, Role.superuser)),
+    db: AsyncSession = Depends(get_db),
+):
+    await finance.cancel_lesson(
+        db,
+        lesson,
+        user,
+        kind=data.kind,
+        comment=data.comment,
+        charge_amount=data.charge_amount,
+    )
+    return lesson
+
+
+@router.post("/lessons/{lesson_id}/restore", response_model=LessonOut)
+async def restore_lesson(
+    lesson: Lesson = Depends(get_lesson_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    await finance.restore_lesson(db, lesson)
     return lesson
 
 

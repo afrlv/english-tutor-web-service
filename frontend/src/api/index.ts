@@ -103,6 +103,17 @@ export const conductLesson = (id: number) =>
   api.post<Lesson>(`/lessons/${id}/conduct`).then((r) => r.data);
 export const revertLesson = (id: number) =>
   api.post<Lesson>(`/lessons/${id}/revert`).then((r) => r.data);
+export const cancelLesson = (
+  id: number,
+  kind: string,
+  comment: string | null,
+  charge_amount: string | null,
+) =>
+  api
+    .post<Lesson>(`/lessons/${id}/cancel`, { kind, comment, charge_amount })
+    .then((r) => r.data);
+export const restoreLesson = (id: number) =>
+  api.post<Lesson>(`/lessons/${id}/restore`).then((r) => r.data);
 export const addHomework = (lessonId: number, description: string) =>
   api.post<Homework>(`/lessons/${lessonId}/homeworks`, { description }).then((r) => r.data);
 export const updateHomework = (id: number, data: { description?: string; is_done?: boolean }) =>

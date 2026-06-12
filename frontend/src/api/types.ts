@@ -39,6 +39,8 @@ export interface Homework {
   created_at: string;
 }
 
+export type CancellationKind = "teacher" | "student" | "late";
+
 export interface Lesson {
   id: number;
   student_id: number;
@@ -48,6 +50,9 @@ export interface Lesson {
   recommendation: string | null;
   status: LessonStatus;
   conducted_at: string | null;
+  cancellation_kind: CancellationKind | null;
+  cancellation_comment: string | null;
+  rescheduled_from: string | null;
   homeworks: Homework[];
 }
 

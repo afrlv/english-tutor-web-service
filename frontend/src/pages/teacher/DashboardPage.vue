@@ -16,19 +16,23 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import {
+  cancelLesson,
   conductLesson,
   createLesson,
   deleteLesson,
   financeSummary,
   listAllLessons,
   listStudents,
+  restoreLesson,
   revertLesson,
   updateLesson,
 } from "../../api";
 import type { CalendarLesson, FinanceSummary, Student } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
+import CancelLessonDialog, { type CancelKind } from "../../components/CancelLessonDialog.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
+import { cancellationLabels, statusLabel, statusSeverity } from "../../utils/lessons";
 
 const router = useRouter();
 const toast = useToast();
@@ -42,6 +46,7 @@ const clickedDate = ref<Date | null>(null);
 const selectedLesson = ref<CalendarLesson | null>(null);
 const editingLesson = ref<CalendarLesson | null>(null);
 const acting = ref(false);
+const cancelOpen = ref(false);
 
 // Цвета событий по статусу урока
 const statusColors: Record<string, string> = {
@@ -170,6 +175,45 @@ async function onRevert() {
   }
 }
 
+async function onCancelConfirm(
+  kind: CancelKind,
+  comment: string | null,
+  chargeAmount: string | null,
+) {
+  if (!selectedLesson.value) return;
+  acting.value = true;
+  try {
+    await cancelLesson(selectedLesson.value.id, kind, comment, chargeAmount);
+    cancelOpen.value = false;
+    selectedLesson.value = null;
+    await refresh();
+    toast.add({
+      severity: "success",
+      summary: kind === "late" ? "Урок отменён, оплата начислена" : "Урок отменён",
+      life: 3000,
+    });
+  } catch (e) {
+    showError(e, "Не удалось отменить урок");
+  } finally {
+    acting.value = false;
+  }
+}
+
+async function onRestore() {
+  if (!selectedLesson.value) return;
+  acting.value = true;
+  try {
+    await restoreLesson(selectedLesson.value.id);
+    selectedLesson.value = null;
+    await refresh();
+    toast.add({ severity: "success", summary: "Урок восстановлен", life: 3000 });
+  } catch (e) {
+    showError(e, "Не удалось восстановить урок");
+  } finally {
+    acting.value = false;
+  }
+}
+
 async function onDelete() {
   if (!selectedLesson.value) return;
   acting.value = true;
@@ -276,21 +320,22 @@ onMounted(async () => {
           <div class="row">
             <span class="label">Статус</span>
             <Tag
-              :value="
-                selectedLesson.status === 'conducted'
-                  ? 'Проведён'
-                  : selectedLesson.status === 'cancelled'
-                    ? 'Отменён'
-                    : 'Запланирован'
-              "
-              :severity="
-                selectedLesson.status === 'conducted'
-                  ? 'success'
-                  : selectedLesson.status === 'cancelled'
-                    ? 'danger'
-                    : 'info'
-              "
+              :value="statusLabel(selectedLesson.status)"
+              :severity="statusSeverity(selectedLesson.status)"
             />
+          </div>
+          <div v-if="selectedLesson.cancellation_kind" class="row">
+            <span class="label">Причина</span>
+            <span>
+              {{ cancellationLabels[selectedLesson.cancellation_kind] }}
+              <template v-if="selectedLesson.cancellation_comment">
+                — {{ selectedLesson.cancellation_comment }}
+              </template>
+            </span>
+          </div>
+          <div v-if="selectedLesson.rescheduled_from" class="row">
+            <span class="label">Перенесён с</span>
+            <span>{{ formatDateTime(selectedLesson.rescheduled_from) }}</span>
           </div>
           <div v-if="selectedLesson.topic" class="row">
             <span class="label">Тема</span>
@@ -322,6 +367,23 @@ onMounted(async () => {
             :loading="acting"
             @click="onRevert"
           />
+          <Button
+            v-if="selectedLesson.status === 'planned'"
+            label="Отменить"
+            icon="pi pi-ban"
+            severity="warn"
+            outlined
+            @click="cancelOpen = true"
+          />
+          <Button
+            v-if="selectedLesson.status === 'cancelled'"
+            label="Восстановить"
+            icon="pi pi-replay"
+            severity="success"
+            outlined
+            :loading="acting"
+            @click="onRestore"
+          />
           <Button label="Изменить" icon="pi pi-pencil" severity="secondary" @click="openEdit" />
           <Button
             label="Удалить"
@@ -340,6 +402,8 @@ onMounted(async () => {
         </div>
       </template>
     </Dialog>
+
+    <CancelLessonDialog v-model:visible="cancelOpen" @confirm="onCancelConfirm" />
   </AppLayout>
 </template>
 

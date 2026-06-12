@@ -26,6 +26,7 @@ import {
   addComment,
   addHomework,
   addPayment,
+  cancelLesson,
   conductLesson,
   createLesson,
   createParent,
@@ -39,6 +40,7 @@ import {
   listParents,
   listSchedule,
   listTransactions,
+  restoreLesson,
   revertLesson,
   savePrivateNote,
   setStudentPassword,
@@ -55,8 +57,10 @@ import type {
   Transaction,
 } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
+import CancelLessonDialog, { type CancelKind } from "../../components/CancelLessonDialog.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
+import { cancellationLabels, statusLabel, statusSeverity } from "../../utils/lessons";
 
 const route = useRoute();
 const toast = useToast();
@@ -72,6 +76,7 @@ const transactions = ref<Transaction[]>([]);
 // уроки
 const lessonDialogOpen = ref(false);
 const editingLesson = ref<Lesson | null>(null);
+const cancellingLesson = ref<Lesson | null>(null);
 // повторяющееся расписание
 const slots = ref<ScheduleSlot[]>([]);
 const newSlotDay = ref<number | null>(null);
@@ -220,6 +225,41 @@ async function onRevert(lesson: Lesson) {
     ]);
   } catch (e) {
     showError(e, "Не удалось откатить урок");
+  }
+}
+
+async function onCancelConfirm(
+  kind: CancelKind,
+  comment: string | null,
+  chargeAmount: string | null,
+) {
+  if (!cancellingLesson.value) return;
+  try {
+    await cancelLesson(cancellingLesson.value.id, kind, comment, chargeAmount);
+    cancellingLesson.value = null;
+    [lessons.value, transactions.value] = await Promise.all([
+      listLessons(studentId),
+      listTransactions(studentId),
+    ]);
+    toast.add({
+      severity: "success",
+      summary: kind === "late" ? "Урок отменён, оплата начислена" : "Урок отменён",
+      life: 3000,
+    });
+  } catch (e) {
+    showError(e, "Не удалось отменить урок");
+  }
+}
+
+async function onRestore(lesson: Lesson) {
+  try {
+    await restoreLesson(lesson.id);
+    [lessons.value, transactions.value] = await Promise.all([
+      listLessons(studentId),
+      listTransactions(studentId),
+    ]);
+  } catch (e) {
+    showError(e, "Не удалось восстановить урок");
   }
 }
 
@@ -397,26 +437,26 @@ async function onSetPassword() {
               <DataTable :value="lessons" data-key="id">
                 <template #empty>Уроков пока нет</template>
                 <Column header="Когда">
-                  <template #body="{ data }">{{ formatDateTime(data.scheduled_at) }}</template>
+                  <template #body="{ data }">
+                    {{ formatDateTime(data.scheduled_at) }}
+                    <i
+                      v-if="data.rescheduled_from"
+                      v-tooltip="`Перенесён с ${formatDateTime(data.rescheduled_from)}`"
+                      class="pi pi-history rescheduled"
+                    />
+                  </template>
                 </Column>
                 <Column field="topic" header="Тема" />
                 <Column header="Статус">
                   <template #body="{ data }">
                     <Tag
-                      :value="
-                        data.status === 'conducted'
-                          ? 'Проведён'
-                          : data.status === 'cancelled'
-                            ? 'Отменён'
-                            : 'Запланирован'
+                      v-tooltip="
+                        data.cancellation_kind
+                          ? cancellationLabels[data.cancellation_kind as keyof typeof cancellationLabels]
+                          : undefined
                       "
-                      :severity="
-                        data.status === 'conducted'
-                          ? 'success'
-                          : data.status === 'cancelled'
-                            ? 'danger'
-                            : 'info'
-                      "
+                      :value="statusLabel(data.status)"
+                      :severity="statusSeverity(data.status)"
                     />
                   </template>
                 </Column>
@@ -467,6 +507,24 @@ async function onSetPassword() {
                         text
                         rounded
                         @click="onRevert(data)"
+                      />
+                      <Button
+                        v-if="data.status === 'planned'"
+                        v-tooltip="'Отменить урок'"
+                        icon="pi pi-ban"
+                        severity="warn"
+                        text
+                        rounded
+                        @click="cancellingLesson = data"
+                      />
+                      <Button
+                        v-if="data.status === 'cancelled'"
+                        v-tooltip="'Восстановить урок'"
+                        icon="pi pi-replay"
+                        severity="success"
+                        text
+                        rounded
+                        @click="onRestore(data)"
                       />
                       <Button icon="pi pi-pencil" text rounded @click="openEditLesson(data)" />
                       <Button
@@ -590,6 +648,12 @@ async function onSetPassword() {
       @save="saveLesson"
     />
 
+    <CancelLessonDialog
+      :visible="cancellingLesson !== null"
+      @update:visible="cancellingLesson = null"
+      @confirm="onCancelConfirm"
+    />
+
     <Dialog
       :visible="homeworkLesson !== null"
       header="Новое домашнее задание"
@@ -666,6 +730,11 @@ label {
 .actions {
   display: flex;
   gap: 0.25rem;
+}
+.rescheduled {
+  margin-left: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--p-amber-600);
 }
 .payment-form {
   display: flex;

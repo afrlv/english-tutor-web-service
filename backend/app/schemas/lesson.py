@@ -1,8 +1,9 @@
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models import LessonStatus
+from app.models import CancellationKind, LessonStatus
 
 
 class HomeworkOut(BaseModel):
@@ -40,6 +41,9 @@ class LessonOut(BaseModel):
     recommendation: str | None
     status: LessonStatus
     conducted_at: datetime | None
+    cancellation_kind: CancellationKind | None = None
+    cancellation_comment: str | None = None
+    rescheduled_from: datetime | None = None
     homeworks: list[HomeworkOut]
 
 
@@ -57,8 +61,15 @@ class LessonCreate(BaseModel):
 
 
 class LessonUpdate(BaseModel):
+    # Статус меняется только явными действиями: conduct/revert/cancel/restore
     scheduled_at: datetime | None = None
     topic: str | None = None
     zoom_link: str | None = None
     recommendation: str | None = None
-    status: LessonStatus | None = None
+
+
+class LessonCancelIn(BaseModel):
+    kind: CancellationKind
+    comment: str | None = None
+    # Для late: своя сумма начисления (по умолчанию — полная цена урока)
+    charge_amount: Decimal | None = None

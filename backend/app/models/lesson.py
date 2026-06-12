@@ -13,6 +13,12 @@ class LessonStatus(str, enum.Enum):
     cancelled = "cancelled"
 
 
+class CancellationKind(str, enum.Enum):
+    teacher = "teacher"  # отменил учитель — без оплаты
+    student = "student"  # ученик предупредил заранее — без оплаты
+    late = "late"  # поздняя отмена / неявка — оплачивается
+
+
 class Lesson(Base, CreatedAtMixin):
     __tablename__ = "lessons"
     # Один слот не может породить два урока на одну дату — защита от повторной
@@ -33,6 +39,12 @@ class Lesson(Base, CreatedAtMixin):
     conducted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Когда ученику отправлено напоминание (защита от повторной отправки)
     reminder_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancellation_kind: Mapped[CancellationKind | None] = mapped_column(
+        Enum(CancellationKind, name="cancellation_kind")
+    )
+    cancellation_comment: Mapped[str | None] = mapped_column(Text)
+    # Исходное время первого переноса — «урок перенесён с …»
+    rescheduled_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     homeworks: Mapped[list["Homework"]] = relationship(
         back_populates="lesson", cascade="all, delete-orphan", lazy="selectin"

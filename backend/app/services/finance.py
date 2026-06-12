@@ -6,6 +6,7 @@ from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
+    CancellationKind,
     Lesson,
     LessonStatus,
     Parent,
@@ -32,16 +33,25 @@ _paid = func.coalesce(
 )
 
 
-async def conduct_lesson(db: AsyncSession, lesson: Lesson, actor: User) -> None:
-    """Урок проведён: статус + начисление по текущей цене с карточки родителя."""
-    if lesson.status == LessonStatus.conducted:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Урок уже проведён")
-    parent = await db.scalar(select(Parent).where(Parent.student_id == lesson.student_id))
+async def _get_parent_or_409(db: AsyncSession, student_id: int) -> Parent:
+    parent = await db.scalar(select(Parent).where(Parent.student_id == student_id))
     if parent is None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "Сначала заведите карточку родителя с ценой урока",
         )
+    return parent
+
+
+async def conduct_lesson(db: AsyncSession, lesson: Lesson, actor: User) -> None:
+    """Урок проведён: статус + начисление по текущей цене с карточки родителя."""
+    if lesson.status == LessonStatus.conducted:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Урок уже проведён")
+    if lesson.status == LessonStatus.cancelled:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Урок отменён — сначала восстановите его"
+        )
+    parent = await _get_parent_or_409(db, lesson.student_id)
     lesson.status = LessonStatus.conducted
     lesson.conducted_at = datetime.now(timezone.utc)
     db.add(
@@ -53,6 +63,62 @@ async def conduct_lesson(db: AsyncSession, lesson: Lesson, actor: User) -> None:
             created_by=actor.id,
         )
     )
+    await db.commit()
+
+
+async def cancel_lesson(
+    db: AsyncSession,
+    lesson: Lesson,
+    actor: User,
+    *,
+    kind: CancellationKind,
+    comment: str | None = None,
+    charge_amount: Decimal | None = None,
+) -> None:
+    """Отмена урока. Поздняя отмена/неявка — с начислением.
+
+    Сумма начисления: charge_amount, если указана (например, 50% по правилам
+    учителя), иначе полная цена с карточки родителя.
+    """
+    if lesson.status != LessonStatus.planned:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Отменить можно только запланированный урок"
+        )
+    if kind == CancellationKind.late:
+        parent = await _get_parent_or_409(db, lesson.student_id)
+        amount = charge_amount if charge_amount is not None else parent.lesson_price
+        if amount <= ZERO:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_CONTENT, "Сумма должна быть больше нуля"
+            )
+        db.add(
+            Transaction(
+                student_id=lesson.student_id,
+                type=TransactionType.charge,
+                amount=amount,
+                lesson_id=lesson.id,
+                comment="Поздняя отмена / неявка",
+                created_by=actor.id,
+            )
+        )
+    lesson.status = LessonStatus.cancelled
+    lesson.cancellation_kind = kind
+    lesson.cancellation_comment = comment
+    await db.commit()
+
+
+async def restore_lesson(db: AsyncSession, lesson: Lesson) -> None:
+    """Восстановление отменённого урока: снова planned, начисление снимается."""
+    if lesson.status != LessonStatus.cancelled:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Урок не отменён")
+    charge = await db.scalar(
+        select(Transaction).where(Transaction.lesson_id == lesson.id)
+    )
+    if charge is not None:
+        await db.delete(charge)
+    lesson.status = LessonStatus.planned
+    lesson.cancellation_kind = None
+    lesson.cancellation_comment = None
     await db.commit()
 
 
