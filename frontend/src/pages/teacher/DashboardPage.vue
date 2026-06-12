@@ -29,6 +29,7 @@ import {
 } from "../../api";
 import type { CalendarLesson, FinanceSummary, Student } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
+import BalanceCell from "../../components/BalanceCell.vue";
 import CancelLessonDialog, { type CancelKind } from "../../components/CancelLessonDialog.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
@@ -286,9 +287,9 @@ onMounted(async () => {
             <Column header="Оплачено">
               <template #body="{ data }">{{ formatMoney(data.paid) }}</template>
             </Column>
-            <Column header="Долг">
+            <Column header="Баланс">
               <template #body="{ data }">
-                <span :class="{ debt: parseFloat(data.debt) > 0 }">{{ formatMoney(data.debt) }}</span>
+                <BalanceCell :debt="data.debt" :lesson-price="data.lesson_price" />
               </template>
             </Column>
           </DataTable>

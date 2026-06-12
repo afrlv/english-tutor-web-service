@@ -160,10 +160,12 @@ async def finance_summary(db: AsyncSession) -> FinanceSummary:
             select(
                 Student.id,
                 User.full_name,
+                func.coalesce(func.max(Parent.lesson_price), 0).label("lesson_price"),
                 _charged.label("earned"),
                 _paid.label("paid"),
             )
             .join(User, User.id == Student.user_id)
+            .outerjoin(Parent, Parent.student_id == Student.id)
             .outerjoin(Transaction, Transaction.student_id == Student.id)
             .group_by(Student.id, User.full_name)
             .order_by(User.full_name)
@@ -173,11 +175,12 @@ async def finance_summary(db: AsyncSession) -> FinanceSummary:
         StudentFinance(
             student_id=sid,
             student_name=name,
+            lesson_price=price,
             earned=earned,
             paid=paid,
             debt=earned - paid,
         )
-        for sid, name, earned, paid in rows
+        for sid, name, price, earned, paid in rows
     ]
     return FinanceSummary(
         total_earned=sum((s.earned for s in students), ZERO), students=students

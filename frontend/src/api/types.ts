@@ -101,6 +101,7 @@ export interface StudentFinance {
   earned: string;
   paid: string;
   debt: string;
+  lesson_price: string;
 }
 
 export interface FinanceSummary {

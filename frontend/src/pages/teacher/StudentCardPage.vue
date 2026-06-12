@@ -19,7 +19,7 @@ import TabPanels from "primevue/tabpanels";
 import Tabs from "primevue/tabs";
 import Tag from "primevue/tag";
 import Textarea from "primevue/textarea";
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 
 import {
@@ -57,6 +57,7 @@ import type {
   Transaction,
 } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
+import BalanceCell from "../../components/BalanceCell.vue";
 import CancelLessonDialog, { type CancelKind } from "../../components/CancelLessonDialog.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
@@ -91,6 +92,24 @@ const parentForm = ref({ email: "", full_name: "", lesson_price: 0, recommendati
 // финансы
 const paymentAmount = ref<number | null>(null);
 const paymentComment = ref("");
+
+const lessonPrice = computed(() => parseFloat(parents.value[0]?.lesson_price ?? "0"));
+const currentDebt = computed(() => {
+  const charged = transactions.value
+    .filter((t) => t.type === "charge")
+    .reduce((s, t) => s + parseFloat(t.amount), 0);
+  const paid = transactions.value
+    .filter((t) => t.type === "payment")
+    .reduce((s, t) => s + parseFloat(t.amount), 0);
+  return charged - paid;
+});
+
+/** Абонемент: подставить стоимость N уроков в форму оплаты */
+function fillPackage(lessonsCount: number) {
+  if (!lessonPrice.value) return;
+  paymentAmount.value = lessonsCount * lessonPrice.value;
+  paymentComment.value = `Абонемент ${lessonsCount} ${lessonsCount === 4 ? "урока" : "уроков"}`;
+}
 // прочее
 const newComment = ref("");
 const privateNote = ref("");
@@ -542,6 +561,22 @@ async function onSetPassword() {
 
             <!-- Финансы -->
             <TabPanel value="finance">
+              <p class="balance-line">
+                Баланс:
+                <BalanceCell :debt="currentDebt" :lesson-price="lessonPrice" />
+              </p>
+              <div v-if="lessonPrice > 0" class="packages">
+                <span class="packages-label">Абонемент:</span>
+                <Button
+                  v-for="n in [4, 8, 12]"
+                  :key="n"
+                  :label="`${n} ур. — ${(n * lessonPrice).toLocaleString('ru-RU')} ₽`"
+                  size="small"
+                  severity="secondary"
+                  outlined
+                  @click="fillPackage(n)"
+                />
+              </div>
               <div class="payment-form">
                 <InputNumber
                   v-model="paymentAmount"
@@ -741,6 +776,21 @@ label {
   gap: 0.75rem;
   margin-bottom: 1rem;
   flex-wrap: wrap;
+}
+.balance-line {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+.packages {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.packages-label {
+  font-size: 0.9rem;
+  color: var(--p-text-muted-color);
 }
 .comment {
   border-bottom: 1px solid var(--p-surface-200);

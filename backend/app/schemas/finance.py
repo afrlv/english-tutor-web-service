@@ -29,6 +29,8 @@ class StudentFinance(BaseModel):
     earned: Decimal
     paid: Decimal
     debt: Decimal
+    # Цена урока с карточки родителя (0 — карточки нет) для пересчёта предоплаты в уроки
+    lesson_price: Decimal
 
 
 class FinanceSummary(BaseModel):
