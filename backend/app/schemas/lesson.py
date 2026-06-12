@@ -21,6 +21,16 @@ class AttachmentLinkIn(BaseModel):
     name: str | None = None
 
 
+class LessonAttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    lesson_id: int
+    name: str
+    file_path: str | None
+    url: str | None
+
+
 class HomeworkOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -73,6 +83,7 @@ class LessonOut(BaseModel):
     cancellation_comment: str | None = None
     rescheduled_from: datetime | None = None
     homeworks: list[HomeworkOut]
+    attachments: list[LessonAttachmentOut] = []
 
 
 class LessonCalendarOut(LessonOut):

@@ -393,6 +393,11 @@ onMounted(async () => {
             @click="onDelete"
           />
           <Button
+            label="Карточка урока"
+            icon="pi pi-book"
+            @click="router.push(`/lessons/${selectedLesson.id}`)"
+          />
+          <Button
             label="Карточка ученика"
             icon="pi pi-user"
             text

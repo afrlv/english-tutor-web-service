@@ -1,4 +1,4 @@
-from app.models.attachment import HomeworkAttachment
+from app.models.attachment import HomeworkAttachment, LessonAttachment
 from app.models.base import Base
 from app.models.cards import Card, CardSet
 from app.models.comment import StudentComment
@@ -21,6 +21,7 @@ __all__ = [
     "Homework",
     "HomeworkAttachment",
     "Lesson",
+    "LessonAttachment",
     "LessonStatus",
     "Parent",
     "Role",

@@ -41,6 +41,14 @@ export interface HomeworkAttachment {
   url: string | null;
 }
 
+export interface LessonAttachment {
+  id: number;
+  lesson_id: number;
+  name: string;
+  file_path: string | null;
+  url: string | null;
+}
+
 export interface Homework {
   id: number;
   lesson_id: number;
@@ -70,6 +78,7 @@ export interface Lesson {
   cancellation_comment: string | null;
   rescheduled_from: string | null;
   homeworks: Homework[];
+  attachments: LessonAttachment[];
 }
 
 export interface CalendarLesson extends Lesson {

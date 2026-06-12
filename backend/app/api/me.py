@@ -32,6 +32,21 @@ async def cabinet(
     }
 
 
+@router.get("/lessons/{lesson_id}", response_model=LessonOut)
+async def my_lesson(
+    lesson_id: int,
+    student: Student = Depends(get_own_student),
+    db: AsyncSession = Depends(get_db),
+):
+    """Карточка урока для ученика: материалы, ДЗ, рекомендации."""
+    lesson = await db.scalar(
+        select(Lesson).where(Lesson.id == lesson_id, Lesson.student_id == student.id)
+    )
+    if lesson is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Урок не найден")
+    return lesson
+
+
 @router.post("/avatar", response_model=UserOut)
 async def upload_avatar(
     file: UploadFile,

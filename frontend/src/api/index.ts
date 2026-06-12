@@ -14,6 +14,7 @@ import type {
   Homework,
   HomeworkAttachment,
   Lesson,
+  LessonAttachment,
   Parent,
   ScheduleSlot,
   Student,
@@ -148,6 +149,25 @@ export const addHomeworkLink = (homeworkId: number, url: string, name?: string) 
     .post<HomeworkAttachment>(`/homeworks/${homeworkId}/attachments/link`, { url, name })
     .then((r) => r.data);
 export const deleteAttachment = (id: number) => api.delete(`/attachments/${id}`);
+// материалы урока
+export const getLessonDetail = (id: number) =>
+  api.get<CalendarLesson>(`/lessons/${id}`).then((r) => r.data);
+export const uploadLessonFile = (lessonId: number, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api
+    .post<LessonAttachment>(`/lessons/${lessonId}/attachments`, form)
+    .then((r) => r.data);
+};
+export const addLessonLink = (lessonId: number, url: string, name?: string) =>
+  api
+    .post<LessonAttachment>(`/lessons/${lessonId}/attachments/link`, { url, name })
+    .then((r) => r.data);
+export const deleteLessonAttachment = (id: number) =>
+  api.delete(`/lesson-attachments/${id}`);
+// карточка урока ученика
+export const myLesson = (id: number) =>
+  api.get<Lesson>(`/me/lessons/${id}`).then((r) => r.data);
 
 // --- повторяющееся расписание (teacher) ---
 export const listSchedule = (studentId: number) =>

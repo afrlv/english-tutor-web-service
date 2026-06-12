@@ -3,7 +3,6 @@ import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import Button from "primevue/button";
 import Card from "primevue/card";
-import Checkbox from "primevue/checkbox";
 import Chip from "primevue/chip";
 import Column from "primevue/column";
 import DataTable from "primevue/datatable";
@@ -20,23 +19,17 @@ import Tabs from "primevue/tabs";
 import Tag from "primevue/tag";
 import Textarea from "primevue/textarea";
 import { computed, onMounted, ref } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 
 import {
   addComment,
-  addHomework,
-  addHomeworkLink,
   addPayment,
-  cancelLesson,
   conductLesson,
   createCardSet,
   createLesson,
   createParent,
   createScheduleSlot,
-  deleteAttachment,
   deleteCardSet,
-  deleteHomework,
-  deleteLesson,
   getCardSet,
   deleteScheduleSlot,
   getStudent,
@@ -47,20 +40,18 @@ import {
   listParents,
   listSchedule,
   listTransactions,
-  restoreLesson,
   revertLesson,
   savePrivateNote,
   setStudentPassword,
-  updateHomework,
   updateLesson,
   updateParent,
   updateStudent,
-  uploadHomeworkFile,
 } from "../../api";
 import type {
   CardSet,
   CardSetSummary,
   Comment,
+  Homework,
   Lesson,
   Parent,
   ScheduleSlot,
@@ -68,15 +59,14 @@ import type {
   Transaction,
 } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
-import AttachmentList from "../../components/AttachmentList.vue";
 import BalanceCell from "../../components/BalanceCell.vue";
 import CardSetEditor from "../../components/CardSetEditor.vue";
-import CancelLessonDialog, { type CancelKind } from "../../components/CancelLessonDialog.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
 import { cancellationLabels, statusLabel, statusSeverity } from "../../utils/lessons";
 
 const route = useRoute();
+const router = useRouter();
 const toast = useToast();
 const confirm = useConfirm();
 const studentId = Number(route.params.id);
@@ -92,7 +82,6 @@ const lessonDialogOpen = ref(false);
 const editingLesson = ref<Lesson | null>(null);
 const templateLesson = ref<Lesson | null>(null);
 const lessonInitialDate = ref<Date | null>(null);
-const cancellingLesson = ref<Lesson | null>(null);
 // профиль
 const profileForm = ref({ full_name: "", default_zoom_link: "", birthday: null as Date | null });
 // наборы карточек
@@ -105,21 +94,6 @@ const newSlotDay = ref<number | null>(null);
 const newSlotTime = ref<Date | null>(null);
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const weekdayOptions = WEEKDAYS.map((label, value) => ({ label, value }));
-// ДЗ
-const homeworkLesson = ref<Lesson | null>(null);
-const homeworkText = ref("");
-const linkHomeworkId = ref<number | null>(null);
-const linkUrl = ref("");
-const linkName = ref("");
-const hwFileInput = ref<HTMLInputElement | null>(null);
-const uploadHomeworkId = ref<number | null>(null);
-// вложения, выбранные до создания ДЗ (в диалоге «Новое ДЗ»)
-const newHwFilesInput = ref<HTMLInputElement | null>(null);
-const pendingFiles = ref<File[]>([]);
-const pendingLinks = ref<{ url: string; name: string }[]>([]);
-const pendingLinkUrl = ref("");
-const pendingLinkName = ref("");
-const savingHomework = ref(false);
 // родитель
 const parentForm = ref({ email: "", full_name: "", lesson_price: 0, recommendations: "" });
 // финансы
@@ -300,12 +274,6 @@ function openCreateLesson() {
   lessonDialogOpen.value = true;
 }
 
-function openEditLesson(lesson: Lesson) {
-  editingLesson.value = lesson;
-  templateLesson.value = null;
-  lessonDialogOpen.value = true;
-}
-
 function openDuplicateLesson(lesson: Lesson) {
   // Дубликат: те же поля, время — через неделю
   editingLesson.value = null;
@@ -353,157 +321,6 @@ async function onRevert(lesson: Lesson) {
   } catch (e) {
     showError(e, "Не удалось откатить урок");
   }
-}
-
-async function onCancelConfirm(
-  kind: CancelKind,
-  comment: string | null,
-  chargeAmount: string | null,
-) {
-  if (!cancellingLesson.value) return;
-  try {
-    await cancelLesson(cancellingLesson.value.id, kind, comment, chargeAmount);
-    cancellingLesson.value = null;
-    [lessons.value, transactions.value] = await Promise.all([
-      listLessons(studentId),
-      listTransactions(studentId),
-    ]);
-    toast.add({
-      severity: "success",
-      summary: kind === "late" ? "Урок отменён, оплата начислена" : "Урок отменён",
-      life: 3000,
-    });
-  } catch (e) {
-    showError(e, "Не удалось отменить урок");
-  }
-}
-
-async function onRestore(lesson: Lesson) {
-  try {
-    await restoreLesson(lesson.id);
-    [lessons.value, transactions.value] = await Promise.all([
-      listLessons(studentId),
-      listTransactions(studentId),
-    ]);
-  } catch (e) {
-    showError(e, "Не удалось восстановить урок");
-  }
-}
-
-function onDeleteLesson(lesson: Lesson) {
-  confirm.require({
-    message: "Удалить урок?",
-    header: "Подтверждение",
-    acceptLabel: "Удалить",
-    rejectLabel: "Отмена",
-    acceptProps: { severity: "danger" },
-    accept: async () => {
-      try {
-        await deleteLesson(lesson.id);
-        lessons.value = await listLessons(studentId);
-      } catch (e) {
-        showError(e, "Не удалось удалить урок");
-      }
-    },
-  });
-}
-
-// --- ДЗ ---
-
-function onPickNewHwFiles(event: Event) {
-  const files = (event.target as HTMLInputElement).files;
-  if (files) pendingFiles.value.push(...Array.from(files));
-  (event.target as HTMLInputElement).value = "";
-}
-
-function addPendingLink() {
-  const url = pendingLinkUrl.value.trim();
-  if (!url) return;
-  pendingLinks.value.push({ url, name: pendingLinkName.value.trim() || url });
-  pendingLinkUrl.value = "";
-  pendingLinkName.value = "";
-}
-
-async function onAddHomework() {
-  if (!homeworkLesson.value || !homeworkText.value.trim()) return;
-  savingHomework.value = true;
-  try {
-    const hw = await addHomework(homeworkLesson.value.id, homeworkText.value.trim());
-    for (const file of pendingFiles.value) {
-      await uploadHomeworkFile(hw.id, file);
-    }
-    for (const link of pendingLinks.value) {
-      await addHomeworkLink(hw.id, link.url, link.name);
-    }
-    homeworkText.value = "";
-    pendingFiles.value = [];
-    pendingLinks.value = [];
-    homeworkLesson.value = null;
-    lessons.value = await listLessons(studentId);
-  } catch (e) {
-    showError(e, "Не удалось добавить задание");
-  } finally {
-    savingHomework.value = false;
-  }
-}
-
-async function onToggleHomework(id: number, is_done: boolean) {
-  await updateHomework(id, { is_done });
-  lessons.value = await listLessons(studentId);
-}
-
-const gradeOptions = [2, 3, 4, 5].map((g) => ({ label: String(g), value: g }));
-
-async function onGradeChange(id: number, grade: number | null) {
-  // Выбор оценки = проверено; очистка — снимает проверку
-  if (grade === null) {
-    await updateHomework(id, { is_checked: false });
-  } else {
-    await updateHomework(id, { grade });
-  }
-  lessons.value = await listLessons(studentId);
-}
-
-async function onDeleteHomework(id: number) {
-  await deleteHomework(id);
-  lessons.value = await listLessons(studentId);
-}
-
-// --- вложения ДЗ ---
-
-function pickHomeworkFile(homeworkId: number) {
-  uploadHomeworkId.value = homeworkId;
-  hwFileInput.value?.click();
-}
-
-async function onHomeworkFile(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
-  (event.target as HTMLInputElement).value = "";
-  if (!file || uploadHomeworkId.value === null) return;
-  try {
-    await uploadHomeworkFile(uploadHomeworkId.value, file);
-    lessons.value = await listLessons(studentId);
-  } catch (e) {
-    showError(e, "Не удалось загрузить файл");
-  }
-}
-
-async function onAddLink() {
-  if (linkHomeworkId.value === null || !linkUrl.value.trim()) return;
-  try {
-    await addHomeworkLink(linkHomeworkId.value, linkUrl.value.trim(), linkName.value.trim() || undefined);
-    linkHomeworkId.value = null;
-    linkUrl.value = "";
-    linkName.value = "";
-    lessons.value = await listLessons(studentId);
-  } catch (e) {
-    showError(e, "Не удалось добавить ссылку");
-  }
-}
-
-async function onRemoveAttachment(id: number) {
-  await deleteAttachment(id);
-  lessons.value = await listLessons(studentId);
 }
 
 // --- родитель ---
@@ -665,72 +482,26 @@ async function onSetPassword() {
                 </Column>
                 <Column header="ДЗ">
                   <template #body="{ data }">
-                    <div v-for="hw in data.homeworks" :key="hw.id" class="hw-block">
-                      <div class="hw-row">
-                        <Checkbox
-                          :model-value="hw.is_done"
-                          binary
-                          @update:model-value="(v: boolean) => onToggleHomework(hw.id, v)"
-                        />
-                        <span :class="{ done: hw.is_done }">{{ hw.description }}</span>
-                        <Select
-                          v-tooltip="'Оценка (выбор = проверено)'"
-                          :model-value="hw.grade"
-                          :options="gradeOptions"
-                          option-label="label"
-                          option-value="value"
-                          placeholder="Оценка"
-                          show-clear
-                          size="small"
-                          class="grade-select"
-                          @update:model-value="(v: number | null) => onGradeChange(hw.id, v)"
-                        />
-                        <Button
-                          v-tooltip="'Прикрепить файл'"
-                          icon="pi pi-paperclip"
-                          text
-                          rounded
-                          size="small"
-                          @click="pickHomeworkFile(hw.id)"
-                        />
-                        <Button
-                          v-tooltip="'Добавить ссылку'"
-                          icon="pi pi-link"
-                          text
-                          rounded
-                          size="small"
-                          @click="linkHomeworkId = hw.id"
-                        />
-                        <Button
-                          icon="pi pi-times"
-                          text
-                          rounded
-                          size="small"
-                          severity="danger"
-                          @click="onDeleteHomework(hw.id)"
-                        />
-                      </div>
-                      <AttachmentList
-                        :attachments="hw.attachments"
-                        removable
-                        @remove="onRemoveAttachment"
+                    <span v-if="data.homeworks.length" class="hw-summary">
+                      {{ data.homeworks.length }} задани{{ data.homeworks.length === 1 ? "е" : "я" }}
+                      <i
+                        v-if="data.homeworks.some((h: Homework) => h.grade)"
+                        v-tooltip="'Есть оценки'"
+                        class="pi pi-verified graded"
                       />
-                      <p v-if="hw.student_answer" class="hw-answer">
-                        Ответ: {{ hw.student_answer }}
-                      </p>
-                    </div>
-                    <Button
-                      label="Добавить ДЗ"
-                      icon="pi pi-plus"
-                      text
-                      size="small"
-                      @click="homeworkLesson = data"
-                    />
+                    </span>
                   </template>
                 </Column>
                 <Column header="Действия">
                   <template #body="{ data }">
                     <div class="actions">
+                      <Button
+                        label="Открыть"
+                        icon="pi pi-book"
+                        text
+                        size="small"
+                        @click="router.push(`/lessons/${data.id}`)"
+                      />
                       <Button
                         v-if="data.status === 'planned'"
                         v-tooltip="'Урок проведён'"
@@ -750,37 +521,11 @@ async function onSetPassword() {
                         @click="onRevert(data)"
                       />
                       <Button
-                        v-if="data.status === 'planned'"
-                        v-tooltip="'Отменить урок'"
-                        icon="pi pi-ban"
-                        severity="warn"
-                        text
-                        rounded
-                        @click="cancellingLesson = data"
-                      />
-                      <Button
-                        v-if="data.status === 'cancelled'"
-                        v-tooltip="'Восстановить урок'"
-                        icon="pi pi-replay"
-                        severity="success"
-                        text
-                        rounded
-                        @click="onRestore(data)"
-                      />
-                      <Button icon="pi pi-pencil" text rounded @click="openEditLesson(data)" />
-                      <Button
                         v-tooltip="'Продублировать на следующую неделю'"
                         icon="pi pi-copy"
                         text
                         rounded
                         @click="openDuplicateLesson(data)"
-                      />
-                      <Button
-                        icon="pi pi-trash"
-                        severity="danger"
-                        text
-                        rounded
-                        @click="onDeleteLesson(data)"
                       />
                     </div>
                   </template>
@@ -986,97 +731,6 @@ async function onSetPassword() {
       @save="saveLesson"
     />
 
-    <CancelLessonDialog
-      :visible="cancellingLesson !== null"
-      @update:visible="cancellingLesson = null"
-      @confirm="onCancelConfirm"
-    />
-
-    <Dialog
-      :visible="homeworkLesson !== null"
-      header="Новое домашнее задание"
-      modal
-      @update:visible="homeworkLesson = null"
-    >
-      <form class="form hw-form" @submit.prevent="onAddHomework">
-        <Textarea v-model="homeworkText" rows="3" placeholder="Что задано" fluid />
-
-        <div class="attach-section">
-          <Button
-            label="Прикрепить файл (PDF, аудио, фото)"
-            icon="pi pi-paperclip"
-            severity="secondary"
-            outlined
-            size="small"
-            @click="newHwFilesInput?.click()"
-          />
-          <input
-            ref="newHwFilesInput"
-            type="file"
-            multiple
-            accept="application/pdf,image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/ogg,audio/wav"
-            hidden
-            @change="onPickNewHwFiles"
-          />
-          <Chip
-            v-for="(f, i) in pendingFiles"
-            :key="`f-${i}`"
-            :label="f.name"
-            icon="pi pi-paperclip"
-            removable
-            @remove="pendingFiles.splice(i, 1)"
-          />
-
-          <div class="link-add">
-            <InputText v-model="pendingLinkUrl" placeholder="https://… (quizlet, видео)" fluid />
-            <InputText v-model="pendingLinkName" placeholder="Подпись" class="link-name" />
-            <Button
-              icon="pi pi-plus"
-              severity="secondary"
-              outlined
-              size="small"
-              :disabled="!pendingLinkUrl.trim()"
-              @click="addPendingLink"
-            />
-          </div>
-          <Chip
-            v-for="(l, i) in pendingLinks"
-            :key="`l-${i}`"
-            :label="l.name"
-            icon="pi pi-link"
-            removable
-            @remove="pendingLinks.splice(i, 1)"
-          />
-        </div>
-
-        <Button
-          type="submit"
-          label="Добавить"
-          :loading="savingHomework"
-          :disabled="!homeworkText.trim()"
-        />
-      </form>
-    </Dialog>
-
-    <Dialog
-      :visible="linkHomeworkId !== null"
-      header="Ссылка к заданию"
-      modal
-      @update:visible="linkHomeworkId = null"
-    >
-      <form class="form" @submit.prevent="onAddLink">
-        <label>
-          Адрес (quizlet, YouTube и т.п.)
-          <InputText v-model="linkUrl" placeholder="https://…" required fluid />
-        </label>
-        <label>
-          Подпись (необязательно)
-          <InputText v-model="linkName" fluid />
-        </label>
-        <Button type="submit" label="Добавить" :disabled="!linkUrl.trim()" />
-      </form>
-    </Dialog>
-
     <Dialog
       :visible="openSet !== null"
       :header="openSet?.title"
@@ -1087,13 +741,6 @@ async function onSetPassword() {
       <CardSetEditor v-if="openSet" :card-set="openSet" @changed="onSetChanged" />
     </Dialog>
 
-    <input
-      ref="hwFileInput"
-      type="file"
-      accept="application/pdf,image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/ogg,audio/wav"
-      hidden
-      @change="onHomeworkFile"
-    />
   </AppLayout>
 </template>
 

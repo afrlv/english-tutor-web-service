@@ -30,6 +30,11 @@ export const router = createRouter({
       component: () => import("../pages/teacher/StudentCardPage.vue"),
       meta: { roles: ["teacher", "superuser"] },
     },
+    {
+      path: "/lessons/:id",
+      component: () => import("../pages/teacher/LessonCardPage.vue"),
+      meta: { roles: ["teacher", "superuser"] },
+    },
     // Финансы переехали на главную учителя
     { path: "/finance", redirect: "/dashboard" },
     {
@@ -40,6 +45,11 @@ export const router = createRouter({
     {
       path: "/study/:id",
       component: () => import("../pages/student/StudyPage.vue"),
+      meta: { roles: ["student"] },
+    },
+    {
+      path: "/my-lessons/:id",
+      component: () => import("../pages/student/MyLessonPage.vue"),
       meta: { roles: ["student"] },
     },
     {

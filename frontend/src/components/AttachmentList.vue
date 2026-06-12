@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import Button from "primevue/button";
 
-import type { HomeworkAttachment } from "../api/types";
+// Подходит и для вложений ДЗ, и для материалов урока
+interface AttachmentLike {
+  id: number;
+  name: string;
+  file_path: string | null;
+  url: string | null;
+}
 
-defineProps<{ attachments: HomeworkAttachment[]; removable?: boolean }>();
+defineProps<{ attachments: AttachmentLike[]; removable?: boolean }>();
 const emit = defineEmits<{ remove: [id: number] }>();
 
-function href(a: HomeworkAttachment): string {
+function href(a: AttachmentLike): string {
   return a.url ?? `/media/${a.file_path}`;
 }
 </script>

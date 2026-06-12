@@ -64,6 +64,10 @@ class Lesson(Base, CreatedAtMixin):
     homeworks: Mapped[list["Homework"]] = relationship(
         back_populates="lesson", cascade="all, delete-orphan", lazy="selectin"
     )
+    attachments: Mapped[list["LessonAttachment"]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin"
+    )
 
 
+from app.models.attachment import LessonAttachment  # noqa: E402
 from app.models.homework import Homework  # noqa: E402

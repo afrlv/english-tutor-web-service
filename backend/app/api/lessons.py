@@ -11,6 +11,7 @@ from app.models import (
     Homework,
     HomeworkAttachment,
     Lesson,
+    LessonAttachment,
     Role,
     ScheduleSlot,
     Student,
@@ -22,6 +23,7 @@ from app.schemas.lesson import (
     HomeworkCreate,
     HomeworkOut,
     HomeworkUpdate,
+    LessonAttachmentOut,
     LessonCalendarOut,
     LessonCancelIn,
     LessonCreate,
@@ -69,6 +71,27 @@ async def list_all_lessons(
         )
         for lesson, name in rows
     ]
+
+
+@router.get("/lessons/{lesson_id}", response_model=LessonCalendarOut)
+async def get_lesson_detail(
+    lesson_id: int, db: AsyncSession = Depends(get_db)
+):
+    """Карточка урока для учителя: урок + имя ученика."""
+    row = (
+        await db.execute(
+            select(Lesson, User.full_name)
+            .join(Student, Student.id == Lesson.student_id)
+            .join(User, User.id == Student.user_id)
+            .where(Lesson.id == lesson_id)
+        )
+    ).one_or_none()
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Урок не найден")
+    lesson, name = row
+    return LessonCalendarOut(
+        **LessonOut.model_validate(lesson).model_dump(), student_name=name
+    )
 
 
 @router.get("/students/{student_id}/lessons", response_model=list[LessonOut])
@@ -177,6 +200,59 @@ async def restore_lesson(
 ):
     await finance.restore_lesson(db, lesson)
     return lesson
+
+
+# --- Материалы урока ---
+
+
+@router.post(
+    "/lessons/{lesson_id}/attachments",
+    response_model=LessonAttachmentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_lesson_material(
+    file: UploadFile,
+    lesson: Lesson = Depends(get_lesson_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    path, name = await save_homework_file(file)
+    attachment = LessonAttachment(lesson_id=lesson.id, name=name, file_path=path)
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+    return attachment
+
+
+@router.post(
+    "/lessons/{lesson_id}/attachments/link",
+    response_model=LessonAttachmentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_lesson_material_link(
+    data: AttachmentLinkIn,
+    lesson: Lesson = Depends(get_lesson_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    attachment = LessonAttachment(
+        lesson_id=lesson.id, name=data.name or data.url, url=data.url
+    )
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+    return attachment
+
+
+@router.delete(
+    "/lesson-attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_lesson_material(
+    attachment_id: int, db: AsyncSession = Depends(get_db)
+):
+    attachment = await db.get(LessonAttachment, attachment_id)
+    if attachment is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Материал не найден")
+    await db.delete(attachment)
+    await db.commit()
 
 
 # --- Повторяющееся расписание ---

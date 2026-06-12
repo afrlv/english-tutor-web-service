@@ -2,7 +2,6 @@
 import Avatar from "primevue/avatar";
 import Button from "primevue/button";
 import Card from "primevue/card";
-import Checkbox from "primevue/checkbox";
 import Column from "primevue/column";
 import DataTable from "primevue/datatable";
 import Tag from "primevue/tag";
@@ -13,14 +12,12 @@ import { computed, onMounted, ref } from "vue";
 import {
   addMyComment,
   fetchCabinet,
-  markHomework,
   myCardSets,
   myComments,
   uploadAvatar,
 } from "../../api";
 import type { Cabinet, CardSetSummary, Comment } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
-import AttachmentList from "../../components/AttachmentList.vue";
 import { useAuthStore } from "../../stores/auth";
 import { formatDateTime } from "../../utils/format";
 
@@ -41,6 +38,10 @@ const upcoming = computed(
 );
 const past = computed(
   () => cabinet.value?.lessons.filter((l) => l.status === "conducted") ?? [],
+);
+// Уроки с несделанными заданиями — быстрые ссылки в карточку урока
+const pendingHomework = computed(
+  () => cabinet.value?.lessons.filter((l) => l.homeworks.some((h) => !h.is_done)) ?? [],
 );
 
 async function load() {
@@ -67,22 +68,6 @@ async function onAvatarChange(event: Event) {
       "Не удалось загрузить файл";
     toast.add({ severity: "error", summary: "Ошибка", detail, life: 4000 });
   }
-}
-
-const answerDrafts = ref<Record<number, string>>({});
-
-async function onToggleHomework(id: number, is_done: boolean) {
-  await markHomework(id, { is_done });
-  await load();
-}
-
-async function onSaveAnswer(id: number) {
-  const answer = answerDrafts.value[id]?.trim();
-  if (!answer) return;
-  await markHomework(id, { student_answer: answer });
-  delete answerDrafts.value[id];
-  await load();
-  toast.add({ severity: "success", summary: "Ответ сохранён", life: 3000 });
 }
 
 async function onAddComment() {
@@ -131,7 +116,11 @@ async function onAddComment() {
       <Card>
         <template #title>Ближайшие уроки</template>
         <template #content>
-          <DataTable :value="upcoming">
+          <DataTable
+            :value="upcoming"
+            selection-mode="single"
+            @row-select="(e) => $router.push(`/my-lessons/${e.data.id}`)"
+          >
             <template #empty>Запланированных уроков нет</template>
             <Column header="Когда">
               <template #body="{ data }">{{ formatDateTime(data.scheduled_at) }}</template>
@@ -139,67 +128,45 @@ async function onAddComment() {
             <Column field="topic" header="Тема" />
             <Column header="Zoom">
               <template #body="{ data }">
-                <a v-if="data.zoom_link" :href="data.zoom_link" target="_blank">
+                <a v-if="data.zoom_link" :href="data.zoom_link" target="_blank" @click.stop>
                   Подключиться
                 </a>
               </template>
             </Column>
-            <Column field="recommendation" header="Рекомендации" />
+            <Column header="">
+              <template #body="{ data }">
+                <Button
+                  label="Открыть урок"
+                  icon="pi pi-book"
+                  text
+                  size="small"
+                  @click="$router.push(`/my-lessons/${data.id}`)"
+                />
+              </template>
+            </Column>
           </DataTable>
         </template>
       </Card>
 
-      <Card>
-        <template #title>Домашние задания</template>
+      <Card v-if="pendingHomework.length">
+        <template #title>Невыполненные задания</template>
         <template #content>
-          <template v-for="lesson in cabinet?.lessons ?? []" :key="lesson.id">
-            <div v-if="lesson.homeworks.length" class="hw-lesson">
+          <div v-for="lesson in pendingHomework" :key="lesson.id" class="pending-row">
+            <span>
               <strong>{{ formatDateTime(lesson.scheduled_at) }}</strong>
-              <span v-if="lesson.topic"> — {{ lesson.topic }}</span>
-              <div v-for="hw in lesson.homeworks" :key="hw.id" class="hw-item">
-                <div class="hw-row">
-                  <Checkbox
-                    :model-value="hw.is_done"
-                    binary
-                    @update:model-value="(v: boolean) => onToggleHomework(hw.id, v)"
-                  />
-                  <span :class="{ done: hw.is_done }">{{ hw.description }}</span>
-                  <Tag
-                    v-if="hw.grade"
-                    :value="`Оценка: ${hw.grade}`"
-                    :severity="hw.grade >= 4 ? 'success' : hw.grade === 3 ? 'warn' : 'danger'"
-                  />
-                  <Tag v-else-if="hw.checked_at" value="Проверено" severity="success" />
-                </div>
-                <AttachmentList :attachments="hw.attachments" />
-                <p v-if="hw.student_answer && answerDrafts[hw.id] === undefined" class="answer">
-                  Мой ответ: {{ hw.student_answer }}
-                  <Button
-                    label="изменить"
-                    text
-                    size="small"
-                    @click="answerDrafts[hw.id] = hw.student_answer ?? ''"
-                  />
-                </p>
-                <div v-else class="answer-form">
-                  <Textarea
-                    :model-value="answerDrafts[hw.id] ?? ''"
-                    rows="2"
-                    placeholder="Написать ответ"
-                    fluid
-                    @update:model-value="(v: string) => (answerDrafts[hw.id] = v)"
-                  />
-                  <Button
-                    label="Сохранить ответ"
-                    size="small"
-                    :disabled="!answerDrafts[hw.id]?.trim()"
-                    @click="onSaveAnswer(hw.id)"
-                  />
-                </div>
-              </div>
-            </div>
-          </template>
-          <p v-if="!cabinet?.lessons.some((l) => l.homeworks.length)">Заданий пока нет</p>
+              <template v-if="lesson.topic"> — {{ lesson.topic }}</template>
+            </span>
+            <Tag
+              :value="`${lesson.homeworks.filter((h) => !h.is_done).length} задани${lesson.homeworks.filter((h) => !h.is_done).length === 1 ? 'е' : 'я'}`"
+              severity="warn"
+            />
+            <Button
+              label="Сделать"
+              icon="pi pi-arrow-right"
+              size="small"
+              @click="$router.push(`/my-lessons/${lesson.id}`)"
+            />
+          </div>
         </template>
       </Card>
 
@@ -222,15 +189,26 @@ async function onAddComment() {
       <Card>
         <template #title>Прошедшие уроки</template>
         <template #content>
-          <DataTable :value="past">
+          <DataTable
+            :value="past"
+            selection-mode="single"
+            @row-select="(e) => $router.push(`/my-lessons/${e.data.id}`)"
+          >
             <template #empty>Проведённых уроков пока нет</template>
             <Column header="Когда">
               <template #body="{ data }">{{ formatDateTime(data.scheduled_at) }}</template>
             </Column>
             <Column field="topic" header="Что проходили" />
-            <Column field="recommendation" header="Рекомендации" />
             <Column header="">
-              <template #body><Tag value="Проведён" severity="success" /></template>
+              <template #body="{ data }">
+                <Button
+                  label="Открыть урок"
+                  icon="pi pi-book"
+                  text
+                  size="small"
+                  @click="$router.push(`/my-lessons/${data.id}`)"
+                />
+              </template>
             </Column>
           </DataTable>
         </template>
