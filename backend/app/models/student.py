@@ -1,4 +1,6 @@
-from sqlalchemy import ForeignKey, Text
+from datetime import date
+
+from sqlalchemy import Date, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin
@@ -12,5 +14,8 @@ class Student(Base, CreatedAtMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
     # Виден только учителю и суперюзеру: не включается в схемы ученика/родителя
     teacher_private_note: Mapped[str | None] = mapped_column(Text)
+    # Постоянная zoom-ссылка: подставляется в новые уроки без своей ссылки
+    default_zoom_link: Mapped[str | None] = mapped_column(String(500))
+    birthday: Mapped[date | None] = mapped_column(Date)
 
     user: Mapped[User] = relationship(lazy="joined")

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, EmailStr
@@ -13,6 +13,8 @@ class StudentCreate(BaseModel):
 
 class StudentUpdate(BaseModel):
     full_name: str | None = None
+    default_zoom_link: str | None = None
+    birthday: date | None = None
 
 
 class StudentOut(BaseModel):
@@ -27,6 +29,8 @@ class StudentTeacherOut(StudentOut):
     """Вид для учителя: включает приватную заметку."""
 
     teacher_private_note: str | None
+    default_zoom_link: str | None = None
+    birthday: date | None = None
 
 
 class PrivateNoteIn(BaseModel):

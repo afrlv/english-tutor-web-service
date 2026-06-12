@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import extract, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -41,6 +41,21 @@ async def compose_digest_lines(db: AsyncSession, now: datetime | None = None) ->
         if lesson.topic:
             line += f", тема: {lesson.topic}"
         lines.append(line)
+
+    # Дни рождения учеников сегодня
+    birthday_names = (
+        await db.scalars(
+            select(User.full_name)
+            .join(Student, Student.user_id == User.id)
+            .where(
+                extract("month", Student.birthday) == now.month,
+                extract("day", Student.birthday) == now.day,
+                User.is_active.is_(True),
+            )
+        )
+    ).all()
+    for name in birthday_names:
+        lines.append(f"🎂 Сегодня день рождения у {name}!")
     return lines
 
 

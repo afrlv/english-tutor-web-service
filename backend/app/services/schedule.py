@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models import Lesson, LessonStatus, ScheduleSlot
+from app.models import Lesson, LessonStatus, ScheduleSlot, Student
 
 logger = logging.getLogger("app.schedule")
 
@@ -30,6 +30,9 @@ async def generate_lessons_for_slot(db: AsyncSession, slot: ScheduleSlot) -> int
             )
         ).all()
     )
+    default_zoom = await db.scalar(
+        select(Student.default_zoom_link).where(Student.id == slot.student_id)
+    )
 
     day = now.date() + timedelta(days=(slot.weekday - now.date().weekday()) % 7)
     created = 0
@@ -42,6 +45,7 @@ async def generate_lessons_for_slot(db: AsyncSession, slot: ScheduleSlot) -> int
                     scheduled_at=scheduled_at,
                     slot_id=slot.id,
                     slot_date=day,
+                    zoom_link=default_zoom,
                 )
             )
             created += 1

@@ -18,6 +18,8 @@ const props = defineProps<{
   students?: Student[];
   /** Предзаполнить дату/время (клик по слоту календаря) */
   initialDate?: Date | null;
+  /** Создание по образцу: поля копируются из этого урока (дубликат) */
+  template?: Lesson | null;
 }>();
 const visible = defineModel<boolean>("visible", { required: true });
 const emit = defineEmits<{
@@ -59,16 +61,18 @@ const canSave = computed(
 
 watch(visible, (open) => {
   if (!open) return;
+  // Источник полей: редактируемый урок или образец для дубликата
+  const source = props.lesson ?? props.template ?? null;
   scheduledAt.value = props.lesson
     ? new Date(props.lesson.scheduled_at)
     : (props.initialDate ?? null);
-  duration.value = props.lesson?.duration_minutes ?? 60;
-  const price = props.lesson?.price != null ? parseFloat(props.lesson.price) : null;
+  duration.value = source?.duration_minutes ?? 60;
+  const price = source?.price != null ? parseFloat(source.price) : null;
   isFree.value = price === 0;
   customPrice.value = price && price > 0 ? price : null;
-  topic.value = props.lesson?.topic ?? "";
-  zoomLink.value = props.lesson?.zoom_link ?? "";
-  recommendation.value = props.lesson?.recommendation ?? "";
+  topic.value = source?.topic ?? "";
+  zoomLink.value = source?.zoom_link ?? "";
+  recommendation.value = source?.recommendation ?? "";
   studentId.value = null;
 });
 

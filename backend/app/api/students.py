@@ -1,10 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.deps import require_roles
-from app.models import Parent, Role, Student, StudentComment, User
+from app.models import (
+    Lesson,
+    LessonStatus,
+    Parent,
+    Role,
+    Student,
+    StudentComment,
+    User,
+)
 from app.schemas.comment import CommentCreate, CommentOut
 from app.schemas.student import (
     ParentCreate,
@@ -65,8 +73,29 @@ async def update_student(
     student: Student = Depends(get_student_or_404),
     db: AsyncSession = Depends(get_db),
 ):
-    if data.full_name is not None:
-        student.user.full_name = data.full_name
+    updates = data.model_dump(exclude_unset=True)
+    if "full_name" in updates and updates["full_name"] is not None:
+        student.user.full_name = updates["full_name"]
+    if "birthday" in updates:
+        student.birthday = updates["birthday"]
+    if "default_zoom_link" in updates:
+        new_link = updates["default_zoom_link"] or None
+        old_link = student.default_zoom_link
+        student.default_zoom_link = new_link
+        # Будущие запланированные уроки без своей ссылки получают новую
+        if new_link != old_link:
+            future = (
+                await db.scalars(
+                    select(Lesson).where(
+                        Lesson.student_id == student.id,
+                        Lesson.status == LessonStatus.planned,
+                        Lesson.scheduled_at > func.now(),
+                        (Lesson.zoom_link.is_(None)) | (Lesson.zoom_link == old_link),
+                    )
+                )
+            ).all()
+            for lesson in future:
+                lesson.zoom_link = new_link
     await db.commit()
     return student
 

@@ -18,6 +18,8 @@ export interface Student {
   user: User;
   created_at: string;
   teacher_private_note?: string | null;
+  default_zoom_link?: string | null;
+  birthday?: string | null;
 }
 
 export interface Parent {

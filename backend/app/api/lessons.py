@@ -96,6 +96,8 @@ async def create_lesson(
     db: AsyncSession = Depends(get_db),
 ):
     lesson = Lesson(student_id=student.id, **data.model_dump())
+    if not lesson.zoom_link:
+        lesson.zoom_link = student.default_zoom_link
     db.add(lesson)
     await db.commit()
     await db.refresh(lesson)

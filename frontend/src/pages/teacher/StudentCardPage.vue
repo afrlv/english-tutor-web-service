@@ -50,6 +50,7 @@ import {
   updateHomework,
   updateLesson,
   updateParent,
+  updateStudent,
   uploadHomeworkFile,
 } from "../../api";
 import type {
@@ -82,7 +83,11 @@ const transactions = ref<Transaction[]>([]);
 // уроки
 const lessonDialogOpen = ref(false);
 const editingLesson = ref<Lesson | null>(null);
+const templateLesson = ref<Lesson | null>(null);
+const lessonInitialDate = ref<Date | null>(null);
 const cancellingLesson = ref<Lesson | null>(null);
+// профиль
+const profileForm = ref({ full_name: "", default_zoom_link: "", birthday: null as Date | null });
 // повторяющееся расписание
 const slots = ref<ScheduleSlot[]>([]);
 const newSlotDay = ref<number | null>(null);
@@ -134,6 +139,11 @@ function showError(e: unknown, fallback: string) {
 async function loadAll() {
   student.value = await getStudent(studentId);
   privateNote.value = student.value.teacher_private_note ?? "";
+  profileForm.value = {
+    full_name: student.value.user.full_name,
+    default_zoom_link: student.value.default_zoom_link ?? "",
+    birthday: student.value.birthday ? new Date(student.value.birthday) : null,
+  };
   [lessons.value, parents.value, comments.value, transactions.value, slots.value] =
     await Promise.all([
       listLessons(studentId),
@@ -201,15 +211,49 @@ async function onRemoveSlot(slot: ScheduleSlot) {
   });
 }
 
+// --- профиль ---
+
+async function saveProfile() {
+  try {
+    const b = profileForm.value.birthday;
+    const birthday = b
+      ? `${b.getFullYear()}-${String(b.getMonth() + 1).padStart(2, "0")}-${String(b.getDate()).padStart(2, "0")}`
+      : null;
+    student.value = await updateStudent(studentId, {
+      full_name: profileForm.value.full_name,
+      default_zoom_link: profileForm.value.default_zoom_link.trim() || null,
+      birthday,
+    });
+    // Смена постоянной ссылки обновляет будущие уроки — перезагружаем
+    lessons.value = await listLessons(studentId);
+    toast.add({ severity: "success", summary: "Профиль сохранён", life: 3000 });
+  } catch (e) {
+    showError(e, "Не удалось сохранить профиль");
+  }
+}
+
 // --- уроки ---
 
 function openCreateLesson() {
   editingLesson.value = null;
+  templateLesson.value = null;
+  lessonInitialDate.value = null;
   lessonDialogOpen.value = true;
 }
 
 function openEditLesson(lesson: Lesson) {
   editingLesson.value = lesson;
+  templateLesson.value = null;
+  lessonDialogOpen.value = true;
+}
+
+function openDuplicateLesson(lesson: Lesson) {
+  // Дубликат: те же поля, время — через неделю
+  editingLesson.value = null;
+  templateLesson.value = lesson;
+  lessonInitialDate.value = new Date(
+    new Date(lesson.scheduled_at).getTime() + 7 * 24 * 3600 * 1000,
+  );
   lessonDialogOpen.value = true;
 }
 
@@ -459,6 +503,7 @@ async function onSetPassword() {
             <Tab value="parent">Родитель</Tab>
             <Tab value="comments">Комментарии</Tab>
             <Tab value="note">Личная заметка</Tab>
+            <Tab value="profile">Профиль</Tab>
             <Tab value="settings">Доступ</Tab>
           </TabList>
           <TabPanels>
@@ -629,6 +674,13 @@ async function onSetPassword() {
                       />
                       <Button icon="pi pi-pencil" text rounded @click="openEditLesson(data)" />
                       <Button
+                        v-tooltip="'Продублировать на следующую неделю'"
+                        icon="pi pi-copy"
+                        text
+                        rounded
+                        @click="openDuplicateLesson(data)"
+                      />
+                      <Button
                         icon="pi pi-trash"
                         severity="danger"
                         text
@@ -744,6 +796,34 @@ async function onSetPassword() {
               <Button label="Сохранить" class="mt" @click="onSaveNote" />
             </TabPanel>
 
+            <!-- Профиль -->
+            <TabPanel value="profile">
+              <form class="form" @submit.prevent="saveProfile">
+                <label>
+                  Имя и фамилия
+                  <InputText v-model="profileForm.full_name" required fluid />
+                </label>
+                <label>
+                  День рождения (попадёт в утренний дайджест)
+                  <DatePicker
+                    v-model="profileForm.birthday"
+                    date-format="dd.mm.yy"
+                    show-icon
+                    fluid
+                  />
+                </label>
+                <label>
+                  Постоянная ссылка Zoom (подставляется в новые уроки)
+                  <InputText
+                    v-model="profileForm.default_zoom_link"
+                    placeholder="https://zoom.us/j/…"
+                    fluid
+                  />
+                </label>
+                <Button type="submit" label="Сохранить" />
+              </form>
+            </TabPanel>
+
             <!-- Доступ -->
             <TabPanel value="settings">
               <form class="form" @submit.prevent="onSetPassword">
@@ -762,6 +842,8 @@ async function onSetPassword() {
     <LessonDialog
       v-model:visible="lessonDialogOpen"
       :lesson="editingLesson"
+      :template="templateLesson"
+      :initial-date="lessonInitialDate"
       @save="saveLesson"
     />
 

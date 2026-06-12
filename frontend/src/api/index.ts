@@ -69,6 +69,10 @@ export const createStudent = (data: { email: string; full_name: string }) =>
   api.post<Student>("/students", data).then((r) => r.data);
 export const getStudent = (id: number) =>
   api.get<Student>(`/students/${id}`).then((r) => r.data);
+export const updateStudent = (
+  id: number,
+  data: { full_name?: string; default_zoom_link?: string | null; birthday?: string | null },
+) => api.patch<Student>(`/students/${id}`, data).then((r) => r.data);
 export const setStudentPassword = (id: number, password: string) =>
   api.post(`/students/${id}/password`, { password });
 export const savePrivateNote = (id: number, teacher_private_note: string | null) =>
