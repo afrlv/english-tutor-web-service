@@ -7,7 +7,7 @@ from app.db import get_db
 from app.deps import get_own_student
 from app.models import Homework, Lesson, Student, StudentComment
 from app.schemas.comment import CommentCreate, CommentOut
-from app.schemas.lesson import HomeworkDoneIn, HomeworkOut, LessonOut
+from app.schemas.lesson import HomeworkOut, HomeworkStudentIn, LessonOut
 from app.schemas.user import UserOut
 from app.services.avatars import save_avatar
 
@@ -59,9 +59,9 @@ async def my_homeworks(
 
 
 @router.patch("/homeworks/{homework_id}", response_model=HomeworkOut)
-async def mark_homework(
+async def update_my_homework(
     homework_id: int,
-    data: HomeworkDoneIn,
+    data: HomeworkStudentIn,
     student: Student = Depends(get_own_student),
     db: AsyncSession = Depends(get_db),
 ):
@@ -72,7 +72,11 @@ async def mark_homework(
     )
     if homework is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Задание не найдено")
-    homework.is_done = data.is_done
+    updates = data.model_dump(exclude_unset=True)
+    if "is_done" in updates:
+        homework.is_done = updates["is_done"]
+    if "student_answer" in updates:
+        homework.student_answer = updates["student_answer"]
     await db.commit()
     return homework
 

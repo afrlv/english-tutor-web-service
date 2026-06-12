@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, ForeignKey, Text
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin
@@ -13,8 +15,15 @@ class Homework(Base, CreatedAtMixin):
     )
     description: Mapped[str] = mapped_column(Text)
     is_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Ответ ученика и отметка учителя «проверено»
+    student_answer: Mapped[str | None] = mapped_column(Text)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     lesson: Mapped["Lesson"] = relationship(back_populates="homeworks")
+    attachments: Mapped[list["HomeworkAttachment"]] = relationship(
+        cascade="all, delete-orphan", lazy="selectin"
+    )
 
 
+from app.models.attachment import HomeworkAttachment  # noqa: E402
 from app.models.lesson import Lesson  # noqa: E402

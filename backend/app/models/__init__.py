@@ -1,3 +1,4 @@
+from app.models.attachment import HomeworkAttachment
 from app.models.base import Base
 from app.models.comment import StudentComment
 from app.models.email import EmailLog, EmailSettings
@@ -15,6 +16,7 @@ __all__ = [
     "EmailLog",
     "EmailSettings",
     "Homework",
+    "HomeworkAttachment",
     "Lesson",
     "LessonStatus",
     "Parent",

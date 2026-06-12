@@ -6,6 +6,21 @@ from pydantic import BaseModel, ConfigDict
 from app.models import CancellationKind, LessonStatus
 
 
+class AttachmentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    homework_id: int
+    name: str
+    file_path: str | None
+    url: str | None
+
+
+class AttachmentLinkIn(BaseModel):
+    url: str
+    name: str | None = None
+
+
 class HomeworkOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -13,6 +28,9 @@ class HomeworkOut(BaseModel):
     lesson_id: int
     description: str
     is_done: bool
+    student_answer: str | None = None
+    checked_at: datetime | None = None
+    attachments: list[AttachmentOut] = []
     created_at: datetime
 
 
@@ -23,10 +41,15 @@ class HomeworkCreate(BaseModel):
 class HomeworkUpdate(BaseModel):
     description: str | None = None
     is_done: bool | None = None
+    # Отметка учителя «проверено» (true → ставится, false → снимается)
+    is_checked: bool | None = None
 
 
-class HomeworkDoneIn(BaseModel):
-    is_done: bool
+class HomeworkStudentIn(BaseModel):
+    """Что может менять ученик в своём ДЗ."""
+
+    is_done: bool | None = None
+    student_answer: str | None = None
 
 
 class LessonOut(BaseModel):

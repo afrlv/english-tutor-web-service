@@ -19,6 +19,7 @@ import {
 } from "../../api";
 import type { Cabinet, Comment } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
+import AttachmentList from "../../components/AttachmentList.vue";
 import { useAuthStore } from "../../stores/auth";
 import { formatDateTime } from "../../utils/format";
 
@@ -62,9 +63,20 @@ async function onAvatarChange(event: Event) {
   }
 }
 
+const answerDrafts = ref<Record<number, string>>({});
+
 async function onToggleHomework(id: number, is_done: boolean) {
-  await markHomework(id, is_done);
+  await markHomework(id, { is_done });
   await load();
+}
+
+async function onSaveAnswer(id: number) {
+  const answer = answerDrafts.value[id]?.trim();
+  if (!answer) return;
+  await markHomework(id, { student_answer: answer });
+  delete answerDrafts.value[id];
+  await load();
+  toast.add({ severity: "success", summary: "Ответ сохранён", life: 3000 });
 }
 
 async function onAddComment() {
@@ -138,13 +150,41 @@ async function onAddComment() {
             <div v-if="lesson.homeworks.length" class="hw-lesson">
               <strong>{{ formatDateTime(lesson.scheduled_at) }}</strong>
               <span v-if="lesson.topic"> — {{ lesson.topic }}</span>
-              <div v-for="hw in lesson.homeworks" :key="hw.id" class="hw-row">
-                <Checkbox
-                  :model-value="hw.is_done"
-                  binary
-                  @update:model-value="(v: boolean) => onToggleHomework(hw.id, v)"
-                />
-                <span :class="{ done: hw.is_done }">{{ hw.description }}</span>
+              <div v-for="hw in lesson.homeworks" :key="hw.id" class="hw-item">
+                <div class="hw-row">
+                  <Checkbox
+                    :model-value="hw.is_done"
+                    binary
+                    @update:model-value="(v: boolean) => onToggleHomework(hw.id, v)"
+                  />
+                  <span :class="{ done: hw.is_done }">{{ hw.description }}</span>
+                  <Tag v-if="hw.checked_at" value="Проверено" severity="success" />
+                </div>
+                <AttachmentList :attachments="hw.attachments" />
+                <p v-if="hw.student_answer && answerDrafts[hw.id] === undefined" class="answer">
+                  Мой ответ: {{ hw.student_answer }}
+                  <Button
+                    label="изменить"
+                    text
+                    size="small"
+                    @click="answerDrafts[hw.id] = hw.student_answer ?? ''"
+                  />
+                </p>
+                <div v-else class="answer-form">
+                  <Textarea
+                    :model-value="answerDrafts[hw.id] ?? ''"
+                    rows="2"
+                    placeholder="Написать ответ"
+                    fluid
+                    @update:model-value="(v: string) => (answerDrafts[hw.id] = v)"
+                  />
+                  <Button
+                    label="Сохранить ответ"
+                    size="small"
+                    :disabled="!answerDrafts[hw.id]?.trim()"
+                    @click="onSaveAnswer(hw.id)"
+                  />
+                </div>
               </div>
             </div>
           </template>
@@ -200,6 +240,23 @@ async function onAddComment() {
 }
 .hw-lesson {
   margin-bottom: 0.75rem;
+}
+.hw-item {
+  margin: 0.4rem 0 0.75rem;
+}
+.answer {
+  margin: 0.3rem 0 0;
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--p-text-muted-color);
+}
+.answer-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  max-width: 28rem;
 }
 .hw-row {
   display: flex;

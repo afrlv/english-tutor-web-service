@@ -31,11 +31,22 @@ export interface Parent {
 
 export type LessonStatus = "planned" | "conducted" | "cancelled";
 
+export interface HomeworkAttachment {
+  id: number;
+  homework_id: number;
+  name: string;
+  file_path: string | null;
+  url: string | null;
+}
+
 export interface Homework {
   id: number;
   lesson_id: number;
   description: string;
   is_done: boolean;
+  student_answer: string | null;
+  checked_at: string | null;
+  attachments: HomeworkAttachment[];
   created_at: string;
 }
 

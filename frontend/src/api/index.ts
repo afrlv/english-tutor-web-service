@@ -9,6 +9,7 @@ import type {
   EmailSettings,
   FinanceSummary,
   Homework,
+  HomeworkAttachment,
   Lesson,
   Parent,
   ScheduleSlot,
@@ -116,9 +117,23 @@ export const restoreLesson = (id: number) =>
   api.post<Lesson>(`/lessons/${id}/restore`).then((r) => r.data);
 export const addHomework = (lessonId: number, description: string) =>
   api.post<Homework>(`/lessons/${lessonId}/homeworks`, { description }).then((r) => r.data);
-export const updateHomework = (id: number, data: { description?: string; is_done?: boolean }) =>
-  api.patch<Homework>(`/homeworks/${id}`, data).then((r) => r.data);
+export const updateHomework = (
+  id: number,
+  data: { description?: string; is_done?: boolean; is_checked?: boolean },
+) => api.patch<Homework>(`/homeworks/${id}`, data).then((r) => r.data);
 export const deleteHomework = (id: number) => api.delete(`/homeworks/${id}`);
+export const uploadHomeworkFile = (homeworkId: number, file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api
+    .post<HomeworkAttachment>(`/homeworks/${homeworkId}/attachments`, form)
+    .then((r) => r.data);
+};
+export const addHomeworkLink = (homeworkId: number, url: string, name?: string) =>
+  api
+    .post<HomeworkAttachment>(`/homeworks/${homeworkId}/attachments/link`, { url, name })
+    .then((r) => r.data);
+export const deleteAttachment = (id: number) => api.delete(`/attachments/${id}`);
 
 // --- повторяющееся расписание (teacher) ---
 export const listSchedule = (studentId: number) =>
@@ -151,8 +166,8 @@ export const uploadAvatar = (file: File) => {
   return api.post<User>("/me/avatar", form).then((r) => r.data);
 };
 export const myHomeworks = () => api.get<Homework[]>("/me/homeworks").then((r) => r.data);
-export const markHomework = (id: number, is_done: boolean) =>
-  api.patch<Homework>(`/me/homeworks/${id}`, { is_done }).then((r) => r.data);
+export const markHomework = (id: number, data: { is_done?: boolean; student_answer?: string }) =>
+  api.patch<Homework>(`/me/homeworks/${id}`, data).then((r) => r.data);
 export const myComments = () => api.get<Comment[]>("/me/comments").then((r) => r.data);
 export const addMyComment = (body: string) =>
   api.post<Comment>("/me/comments", { body }).then((r) => r.data);

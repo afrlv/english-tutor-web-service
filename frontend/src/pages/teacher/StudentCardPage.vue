@@ -25,12 +25,14 @@ import { useRoute } from "vue-router";
 import {
   addComment,
   addHomework,
+  addHomeworkLink,
   addPayment,
   cancelLesson,
   conductLesson,
   createLesson,
   createParent,
   createScheduleSlot,
+  deleteAttachment,
   deleteHomework,
   deleteLesson,
   deleteScheduleSlot,
@@ -47,6 +49,7 @@ import {
   updateHomework,
   updateLesson,
   updateParent,
+  uploadHomeworkFile,
 } from "../../api";
 import type {
   Comment,
@@ -57,6 +60,7 @@ import type {
   Transaction,
 } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
+import AttachmentList from "../../components/AttachmentList.vue";
 import BalanceCell from "../../components/BalanceCell.vue";
 import CancelLessonDialog, { type CancelKind } from "../../components/CancelLessonDialog.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
@@ -87,6 +91,11 @@ const weekdayOptions = WEEKDAYS.map((label, value) => ({ label, value }));
 // ДЗ
 const homeworkLesson = ref<Lesson | null>(null);
 const homeworkText = ref("");
+const linkHomeworkId = ref<number | null>(null);
+const linkUrl = ref("");
+const linkName = ref("");
+const hwFileInput = ref<HTMLInputElement | null>(null);
+const uploadHomeworkId = ref<number | null>(null);
 // родитель
 const parentForm = ref({ email: "", full_name: "", lesson_price: 0, recommendations: "" });
 // финансы
@@ -319,8 +328,50 @@ async function onToggleHomework(id: number, is_done: boolean) {
   lessons.value = await listLessons(studentId);
 }
 
+async function onToggleChecked(id: number, checked: boolean) {
+  await updateHomework(id, { is_checked: checked });
+  lessons.value = await listLessons(studentId);
+}
+
 async function onDeleteHomework(id: number) {
   await deleteHomework(id);
+  lessons.value = await listLessons(studentId);
+}
+
+// --- вложения ДЗ ---
+
+function pickHomeworkFile(homeworkId: number) {
+  uploadHomeworkId.value = homeworkId;
+  hwFileInput.value?.click();
+}
+
+async function onHomeworkFile(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0];
+  (event.target as HTMLInputElement).value = "";
+  if (!file || uploadHomeworkId.value === null) return;
+  try {
+    await uploadHomeworkFile(uploadHomeworkId.value, file);
+    lessons.value = await listLessons(studentId);
+  } catch (e) {
+    showError(e, "Не удалось загрузить файл");
+  }
+}
+
+async function onAddLink() {
+  if (linkHomeworkId.value === null || !linkUrl.value.trim()) return;
+  try {
+    await addHomeworkLink(linkHomeworkId.value, linkUrl.value.trim(), linkName.value.trim() || undefined);
+    linkHomeworkId.value = null;
+    linkUrl.value = "";
+    linkName.value = "";
+    lessons.value = await listLessons(studentId);
+  } catch (e) {
+    showError(e, "Не удалось добавить ссылку");
+  }
+}
+
+async function onRemoveAttachment(id: number) {
+  await deleteAttachment(id);
   lessons.value = await listLessons(studentId);
 }
 
@@ -481,21 +532,56 @@ async function onSetPassword() {
                 </Column>
                 <Column header="ДЗ">
                   <template #body="{ data }">
-                    <div v-for="hw in data.homeworks" :key="hw.id" class="hw-row">
-                      <Checkbox
-                        :model-value="hw.is_done"
-                        binary
-                        @update:model-value="(v: boolean) => onToggleHomework(hw.id, v)"
+                    <div v-for="hw in data.homeworks" :key="hw.id" class="hw-block">
+                      <div class="hw-row">
+                        <Checkbox
+                          :model-value="hw.is_done"
+                          binary
+                          @update:model-value="(v: boolean) => onToggleHomework(hw.id, v)"
+                        />
+                        <span :class="{ done: hw.is_done }">{{ hw.description }}</span>
+                        <Button
+                          v-tooltip="hw.checked_at ? 'Проверено — снять отметку' : 'Отметить проверенным'"
+                          :icon="hw.checked_at ? 'pi pi-verified' : 'pi pi-check-circle'"
+                          :severity="hw.checked_at ? 'success' : 'secondary'"
+                          text
+                          rounded
+                          size="small"
+                          @click="onToggleChecked(hw.id, !hw.checked_at)"
+                        />
+                        <Button
+                          v-tooltip="'Прикрепить файл'"
+                          icon="pi pi-paperclip"
+                          text
+                          rounded
+                          size="small"
+                          @click="pickHomeworkFile(hw.id)"
+                        />
+                        <Button
+                          v-tooltip="'Добавить ссылку'"
+                          icon="pi pi-link"
+                          text
+                          rounded
+                          size="small"
+                          @click="linkHomeworkId = hw.id"
+                        />
+                        <Button
+                          icon="pi pi-times"
+                          text
+                          rounded
+                          size="small"
+                          severity="danger"
+                          @click="onDeleteHomework(hw.id)"
+                        />
+                      </div>
+                      <AttachmentList
+                        :attachments="hw.attachments"
+                        removable
+                        @remove="onRemoveAttachment"
                       />
-                      <span :class="{ done: hw.is_done }">{{ hw.description }}</span>
-                      <Button
-                        icon="pi pi-times"
-                        text
-                        rounded
-                        size="small"
-                        severity="danger"
-                        @click="onDeleteHomework(hw.id)"
-                      />
+                      <p v-if="hw.student_answer" class="hw-answer">
+                        Ответ: {{ hw.student_answer }}
+                      </p>
                     </div>
                     <Button
                       label="Добавить ДЗ"
@@ -700,6 +786,33 @@ async function onSetPassword() {
         <Button type="submit" label="Добавить" :disabled="!homeworkText.trim()" />
       </form>
     </Dialog>
+
+    <Dialog
+      :visible="linkHomeworkId !== null"
+      header="Ссылка к заданию"
+      modal
+      @update:visible="linkHomeworkId = null"
+    >
+      <form class="form" @submit.prevent="onAddLink">
+        <label>
+          Адрес (quizlet, YouTube и т.п.)
+          <InputText v-model="linkUrl" placeholder="https://…" required fluid />
+        </label>
+        <label>
+          Подпись (необязательно)
+          <InputText v-model="linkName" fluid />
+        </label>
+        <Button type="submit" label="Добавить" :disabled="!linkUrl.trim()" />
+      </form>
+    </Dialog>
+
+    <input
+      ref="hwFileInput"
+      type="file"
+      accept="application/pdf,image/jpeg,image/png,image/webp,audio/mpeg,audio/mp4,audio/ogg,audio/wav"
+      hidden
+      @change="onHomeworkFile"
+    />
   </AppLayout>
 </template>
 
@@ -756,7 +869,16 @@ label {
 .hw-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.25rem;
+}
+.hw-block {
+  margin-bottom: 0.5rem;
+}
+.hw-answer {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  font-style: italic;
+  color: var(--p-text-muted-color);
 }
 .done {
   text-decoration: line-through;

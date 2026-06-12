@@ -1,14 +1,24 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.students import get_student_or_404
 from app.db import get_db
 from app.deps import require_roles
-from app.models import Homework, Lesson, Role, ScheduleSlot, Student, User
+from app.models import (
+    Homework,
+    HomeworkAttachment,
+    Lesson,
+    Role,
+    ScheduleSlot,
+    Student,
+    User,
+)
 from app.schemas.lesson import (
+    AttachmentLinkIn,
+    AttachmentOut,
     HomeworkCreate,
     HomeworkOut,
     HomeworkUpdate,
@@ -20,6 +30,7 @@ from app.schemas.lesson import (
 )
 from app.schemas.schedule import ScheduleSlotCreate, ScheduleSlotOut
 from app.services import finance, schedule
+from app.services.hw_files import save_homework_file
 
 router = APIRouter(
     tags=["lessons"],
@@ -242,17 +253,75 @@ async def add_homework(
     return homework
 
 
-@router.patch("/homeworks/{homework_id}", response_model=HomeworkOut)
-async def update_homework(
-    homework_id: int, data: HomeworkUpdate, db: AsyncSession = Depends(get_db)
-):
+async def get_homework_or_404(
+    homework_id: int, db: AsyncSession = Depends(get_db)
+) -> Homework:
     homework = await db.get(Homework, homework_id)
     if homework is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Задание не найдено")
-    for field, value in data.model_dump(exclude_unset=True).items():
+    return homework
+
+
+@router.patch("/homeworks/{homework_id}", response_model=HomeworkOut)
+async def update_homework(
+    data: HomeworkUpdate,
+    homework: Homework = Depends(get_homework_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    updates = data.model_dump(exclude_unset=True)
+    if "is_checked" in updates:
+        checked = updates.pop("is_checked")
+        homework.checked_at = datetime.now(timezone.utc) if checked else None
+    for field, value in updates.items():
         setattr(homework, field, value)
     await db.commit()
     return homework
+
+
+@router.post(
+    "/homeworks/{homework_id}/attachments",
+    response_model=AttachmentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_attachment(
+    file: UploadFile,
+    homework: Homework = Depends(get_homework_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    path, name = await save_homework_file(file)
+    attachment = HomeworkAttachment(homework_id=homework.id, name=name, file_path=path)
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+    return attachment
+
+
+@router.post(
+    "/homeworks/{homework_id}/attachments/link",
+    response_model=AttachmentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_attachment_link(
+    data: AttachmentLinkIn,
+    homework: Homework = Depends(get_homework_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    attachment = HomeworkAttachment(
+        homework_id=homework.id, name=data.name or data.url, url=data.url
+    )
+    db.add(attachment)
+    await db.commit()
+    await db.refresh(attachment)
+    return attachment
+
+
+@router.delete("/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_attachment(attachment_id: int, db: AsyncSession = Depends(get_db)):
+    attachment = await db.get(HomeworkAttachment, attachment_id)
+    if attachment is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Вложение не найдено")
+    await db.delete(attachment)
+    await db.commit()
 
 
 @router.delete("/homeworks/{homework_id}", status_code=status.HTTP_204_NO_CONTENT)
