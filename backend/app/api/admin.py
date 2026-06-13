@@ -67,6 +67,8 @@ async def update_user(
     if data.role is not None:
         user.role = data.role
     if data.is_active is not None:
+        if not data.is_active and user.is_active:
+            user.token_version += 1  # деактивация отзывает активные сессии
         user.is_active = data.is_active
     await db.commit()
     return user
@@ -78,6 +80,7 @@ async def set_password(
 ):
     user = await _get_user(user_id, db)
     user.hashed_password = hash_password(data.password)
+    user.token_version += 1  # сброс пароля админом отзывает прежние сессии
     await db.commit()
     return {"detail": "Пароль установлен"}
 

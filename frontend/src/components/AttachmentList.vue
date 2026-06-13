@@ -13,7 +13,7 @@ defineProps<{ attachments: AttachmentLike[]; removable?: boolean }>();
 const emit = defineEmits<{ remove: [id: number] }>();
 
 function href(a: AttachmentLike): string {
-  return a.url ?? `/media/${a.file_path}`;
+  return a.url ?? `/api/files/${a.file_path}`;
 }
 </script>
 

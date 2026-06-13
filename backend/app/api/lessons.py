@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.students import get_student_or_404
 from app.db import get_db
-from app.deps import require_roles
+from app.deps import get_current_user, owns_student, require_roles
 from app.models import (
     Homework,
     HomeworkAttachment,
@@ -40,10 +40,24 @@ router = APIRouter(
 )
 
 
-async def get_lesson_or_404(lesson_id: int, db: AsyncSession = Depends(get_db)) -> Lesson:
+async def _assert_owns_student(
+    student_id: int, user: User, db: AsyncSession, msg: str
+) -> None:
+    """Проверка владения через ученика-владельца объекта (404 на чужое)."""
+    owner = await db.get(Student, student_id)
+    if owner is None or not owns_student(user, owner):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, msg)
+
+
+async def get_lesson_or_404(
+    lesson_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Lesson:
     lesson = await db.get(Lesson, lesson_id)
     if lesson is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Урок не найден")
+    await _assert_owns_student(lesson.student_id, user, db, "Урок не найден")
     return lesson
 
 
@@ -51,15 +65,18 @@ async def get_lesson_or_404(lesson_id: int, db: AsyncSession = Depends(get_db)) 
 async def list_all_lessons(
     date_from: datetime | None = Query(None, alias="from"),
     date_to: datetime | None = Query(None, alias="to"),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Все уроки всех учеников (для календаря), опционально в диапазоне дат."""
+    """Уроки учеников учителя (для календаря), опционально в диапазоне дат."""
     query = (
         select(Lesson, User.full_name)
         .join(Student, Student.id == Lesson.student_id)
         .join(User, User.id == Student.user_id)
         .order_by(Lesson.scheduled_at)
     )
+    if user.role != Role.superuser:
+        query = query.where(Student.teacher_id == user.id)
     if date_from is not None:
         query = query.where(Lesson.scheduled_at >= date_from)
     if date_to is not None:
@@ -75,12 +92,14 @@ async def list_all_lessons(
 
 @router.get("/lessons/{lesson_id}", response_model=LessonCalendarOut)
 async def get_lesson_detail(
-    lesson_id: int, db: AsyncSession = Depends(get_db)
+    lesson_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Карточка урока для учителя: урок + имя ученика."""
     row = (
         await db.execute(
-            select(Lesson, User.full_name)
+            select(Lesson, User.full_name, Student.teacher_id)
             .join(Student, Student.id == Lesson.student_id)
             .join(User, User.id == Student.user_id)
             .where(Lesson.id == lesson_id)
@@ -88,7 +107,9 @@ async def get_lesson_detail(
     ).one_or_none()
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Урок не найден")
-    lesson, name = row
+    lesson, name, owner_id = row
+    if user.role != Role.superuser and owner_id != user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Урок не найден")
     prev_id = await db.scalar(
         select(Lesson.id)
         .where(
@@ -267,11 +288,15 @@ async def add_lesson_material_link(
     "/lesson-attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT
 )
 async def delete_lesson_material(
-    attachment_id: int, db: AsyncSession = Depends(get_db)
+    attachment_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     attachment = await db.get(LessonAttachment, attachment_id)
     if attachment is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Материал не найден")
+    lesson = await db.get(Lesson, attachment.lesson_id)
+    await _assert_owns_student(lesson.student_id, user, db, "Материал не найден")
     await db.delete(attachment)
     await db.commit()
 
@@ -325,10 +350,15 @@ async def create_schedule_slot(
 
 
 @router.delete("/schedule/{slot_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_schedule_slot(slot_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_schedule_slot(
+    slot_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     slot = await db.get(ScheduleSlot, slot_id)
     if slot is None or not slot.is_active:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Слот не найден")
+    await _assert_owns_student(slot.student_id, user, db, "Слот не найден")
     await schedule.deactivate_slot(db, slot)
 
 
@@ -353,11 +383,15 @@ async def add_homework(
 
 
 async def get_homework_or_404(
-    homework_id: int, db: AsyncSession = Depends(get_db)
+    homework_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> Homework:
     homework = await db.get(Homework, homework_id)
     if homework is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Задание не найдено")
+    lesson = await db.get(Lesson, homework.lesson_id)
+    await _assert_owns_student(lesson.student_id, user, db, "Задание не найдено")
     return homework
 
 
@@ -423,18 +457,25 @@ async def add_attachment_link(
 
 
 @router.delete("/attachments/{attachment_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_attachment(attachment_id: int, db: AsyncSession = Depends(get_db)):
+async def delete_attachment(
+    attachment_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     attachment = await db.get(HomeworkAttachment, attachment_id)
     if attachment is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Вложение не найдено")
+    homework = await db.get(Homework, attachment.homework_id)
+    lesson = await db.get(Lesson, homework.lesson_id)
+    await _assert_owns_student(lesson.student_id, user, db, "Вложение не найдено")
     await db.delete(attachment)
     await db.commit()
 
 
 @router.delete("/homeworks/{homework_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_homework(homework_id: int, db: AsyncSession = Depends(get_db)):
-    homework = await db.get(Homework, homework_id)
-    if homework is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Задание не найдено")
+async def delete_homework(
+    homework: Homework = Depends(get_homework_or_404),
+    db: AsyncSession = Depends(get_db),
+):
     await db.delete(homework)
     await db.commit()

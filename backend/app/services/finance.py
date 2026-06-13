@@ -170,23 +170,26 @@ async def add_payment(
     return tx
 
 
-async def finance_summary(db: AsyncSession) -> FinanceSummary:
-    rows = (
-        await db.execute(
-            select(
-                Student.id,
-                User.full_name,
-                func.coalesce(func.max(Parent.lesson_price), 0).label("lesson_price"),
-                _charged.label("earned"),
-                _paid.label("paid"),
-            )
-            .join(User, User.id == Student.user_id)
-            .outerjoin(Parent, Parent.student_id == Student.id)
-            .outerjoin(Transaction, Transaction.student_id == Student.id)
-            .group_by(Student.id, User.full_name)
-            .order_by(User.full_name)
+async def finance_summary(
+    db: AsyncSession, teacher_id: int | None = None
+) -> FinanceSummary:
+    query = (
+        select(
+            Student.id,
+            User.full_name,
+            func.coalesce(func.max(Parent.lesson_price), 0).label("lesson_price"),
+            _charged.label("earned"),
+            _paid.label("paid"),
         )
-    ).all()
+        .join(User, User.id == Student.user_id)
+        .outerjoin(Parent, Parent.student_id == Student.id)
+        .outerjoin(Transaction, Transaction.student_id == Student.id)
+        .group_by(Student.id, User.full_name)
+        .order_by(User.full_name)
+    )
+    if teacher_id is not None:
+        query = query.where(Student.teacher_id == teacher_id)
+    rows = (await db.execute(query)).all()
     students = [
         StudentFinance(
             student_id=sid,

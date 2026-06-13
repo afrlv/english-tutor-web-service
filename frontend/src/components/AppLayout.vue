@@ -57,7 +57,7 @@ async function onLogout() {
       <div class="user-box">
         <Avatar
           v-if="auth.user?.avatar_path"
-          :image="`/media/${auth.user.avatar_path}`"
+          :image="`/api/files/${auth.user.avatar_path}`"
           shape="circle"
         />
         <span>{{ auth.user?.full_name }}</span>

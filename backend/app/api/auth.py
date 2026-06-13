@@ -31,7 +31,9 @@ async def login(data: LoginIn, response: Response, db: AsyncSession = Depends(ge
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный логин или пароль")
     if not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Учётная запись отключена")
-    _set_auth_cookie(response, create_access_token(user.id, user.role.value))
+    _set_auth_cookie(
+        response, create_access_token(user.id, user.role.value, user.token_version)
+    )
     return user
 
 
@@ -93,7 +95,9 @@ async def impersonate(
         raise HTTPException(status.HTTP_409_CONFLICT, "Это ваш собственный профиль")
     _set_auth_cookie(
         response,
-        create_access_token(target.id, target.role.value, impersonated_by=user.id),
+        create_access_token(
+            target.id, target.role.value, target.token_version, impersonated_by=user.id
+        ),
     )
     out = MeOut.model_validate(target)
     out.impersonating = True
@@ -114,7 +118,10 @@ async def stop_impersonation(
         response.delete_cookie(AUTH_COOKIE)
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Учётная запись недоступна")
     _set_auth_cookie(
-        response, create_access_token(superuser.id, superuser.role.value)
+        response,
+        create_access_token(
+            superuser.id, superuser.role.value, superuser.token_version
+        ),
     )
     return MeOut.model_validate(superuser)
 
@@ -122,11 +129,17 @@ async def stop_impersonation(
 @router.post("/change-password")
 async def change_password(
     data: PasswordChange,
+    response: Response,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     if not verify_password(data.current_password, user.hashed_password):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Текущий пароль неверен")
     user.hashed_password = hash_password(data.new_password)
+    user.token_version += 1  # отзываем прежние сессии
     await db.commit()
+    # Текущему клиенту выдаём свежий токен, чтобы его не разлогинило
+    _set_auth_cookie(
+        response, create_access_token(user.id, user.role.value, user.token_version)
+    )
     return {"detail": "Пароль изменён"}

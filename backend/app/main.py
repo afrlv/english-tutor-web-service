@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 
 from app.api import api_router
 from app.config import get_settings
@@ -29,9 +28,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Кабинет репетитора", lifespan=lifespan)
     app.include_router(api_router)
 
-    media_dir = Path(get_settings().media_dir)
-    media_dir.mkdir(parents=True, exist_ok=True)
-    app.mount("/media", StaticFiles(directory=media_dir), name="media")
+    # Каталог для загрузок; раздаётся не напрямую, а через /api/files с проверкой прав
+    Path(get_settings().media_dir).mkdir(parents=True, exist_ok=True)
     return app
 
 

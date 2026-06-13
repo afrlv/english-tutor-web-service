@@ -10,7 +10,6 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": backend,
-      "/media": backend,
     },
   },
   test: {

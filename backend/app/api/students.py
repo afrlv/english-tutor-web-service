@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
-from app.deps import require_roles
+from app.deps import get_current_user, owns_student, require_roles
 from app.models import (
     Lesson,
     LessonStatus,
@@ -34,28 +34,46 @@ router = APIRouter(
 
 
 async def get_student_or_404(
-    student_id: int, db: AsyncSession = Depends(get_db)
+    student_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> Student:
     student = await db.get(Student, student_id)
-    if student is None:
+    # Чужой ученик неотличим от несуществующего — единый 404 (без раскрытия id)
+    if student is None or not owns_student(user, student):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ученик не найден")
     return student
 
 
 @router.get("/students", response_model=list[StudentTeacherOut])
-async def list_students(db: AsyncSession = Depends(get_db)):
-    return (await db.scalars(select(Student).order_by(Student.id))).all()
+async def list_students(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    query = select(Student).order_by(Student.id)
+    if user.role != Role.superuser:
+        query = query.where(Student.teacher_id == user.id)
+    return (await db.scalars(query)).all()
 
 
 @router.post(
     "/students", response_model=StudentTeacherOut, status_code=status.HTTP_201_CREATED
 )
-async def create_student(data: StudentCreate, db: AsyncSession = Depends(get_db)):
+async def create_student(
+    data: StudentCreate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     """Создаёт пользователя-ученика и карточку; логин/пароль уходят на почту."""
-    user = await create_user_with_credentials_email(
+    if user.role != Role.teacher:
+        # Суперюзер заводит учеников от имени учителя (через режим просмотра)
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Создавать учеников может только учитель (войдите от имени учителя)",
+        )
+    new_user = await create_user_with_credentials_email(
         db, email=data.email, full_name=data.full_name, role=Role.student
     )
-    student = Student(user_id=user.id)
+    student = Student(user_id=new_user.id, teacher_id=user.id)
     db.add(student)
     await db.commit()
     await db.refresh(student)
@@ -107,6 +125,7 @@ async def reset_student_password(
     db: AsyncSession = Depends(get_db),
 ):
     student.user.hashed_password = hash_password(data.password)
+    student.user.token_version += 1  # сброс пароля отзывает прежние сессии ученика
     await db.commit()
     return {"detail": "Пароль изменён"}
 
@@ -167,10 +186,16 @@ async def create_parent(
 
 @router.patch("/parents/{parent_id}", response_model=ParentOut)
 async def update_parent(
-    parent_id: int, data: ParentUpdate, db: AsyncSession = Depends(get_db)
+    parent_id: int,
+    data: ParentUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     parent = await db.get(Parent, parent_id)
     if parent is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Карточка родителя не найдена")
+    owner = await db.get(Student, parent.student_id)
+    if owner is None or not owns_student(user, owner):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Карточка родителя не найдена")
     if data.full_name is not None:
         parent.user.full_name = data.full_name

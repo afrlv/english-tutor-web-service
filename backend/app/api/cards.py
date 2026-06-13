@@ -4,8 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.students import get_student_or_404
 from app.db import get_db
-from app.deps import get_own_student, require_roles
-from app.models import Card, CardSet, Lesson, Role, Student
+from app.deps import get_current_user, get_own_student, owns_student, require_roles
+from app.models import Card, CardSet, Lesson, Role, Student, User
 from app.schemas.cards import (
     AnswerIn,
     CardIn,
@@ -22,10 +22,23 @@ router = APIRouter(tags=["cards"])
 teacher_only = Depends(require_roles(Role.teacher, Role.superuser))
 
 
-async def get_set_or_404(set_id: int, db: AsyncSession = Depends(get_db)) -> CardSet:
+async def _assert_owns_student(
+    student_id: int, user: User, db: AsyncSession, msg: str
+) -> None:
+    owner = await db.get(Student, student_id)
+    if owner is None or not owns_student(user, owner):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, msg)
+
+
+async def get_set_or_404(
+    set_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> CardSet:
     card_set = await db.get(CardSet, set_id)
     if card_set is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Набор не найден")
+    await _assert_owns_student(card_set.student_id, user, db, "Набор не найден")
     return card_set
 
 
@@ -70,10 +83,15 @@ async def create_set(
     return card_set
 
 
-async def get_lesson_or_404(lesson_id: int, db: AsyncSession = Depends(get_db)) -> Lesson:
+async def get_lesson_or_404(
+    lesson_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Lesson:
     lesson = await db.get(Lesson, lesson_id)
     if lesson is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Урок не найден")
+    await _assert_owns_student(lesson.student_id, user, db, "Урок не найден")
     return lesson
 
 
@@ -170,13 +188,25 @@ async def add_card(
     return card
 
 
-@router.patch("/cards/{card_id}", response_model=CardOut, dependencies=[teacher_only])
-async def update_card(
-    card_id: int, data: CardIn, db: AsyncSession = Depends(get_db)
-):
+async def get_card_or_404(
+    card_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Card:
     card = await db.get(Card, card_id)
     if card is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Карточка не найдена")
+    card_set = await db.get(CardSet, card.set_id)
+    await _assert_owns_student(card_set.student_id, user, db, "Карточка не найдена")
+    return card
+
+
+@router.patch("/cards/{card_id}", response_model=CardOut, dependencies=[teacher_only])
+async def update_card(
+    data: CardIn,
+    card: Card = Depends(get_card_or_404),
+    db: AsyncSession = Depends(get_db),
+):
     card.front = data.front
     card.back = data.back
     await db.commit()
@@ -188,10 +218,10 @@ async def update_card(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[teacher_only],
 )
-async def delete_card(card_id: int, db: AsyncSession = Depends(get_db)):
-    card = await db.get(Card, card_id)
-    if card is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Карточка не найдена")
+async def delete_card(
+    card: Card = Depends(get_card_or_404),
+    db: AsyncSession = Depends(get_db),
+):
     await db.delete(card)
     await db.commit()
 

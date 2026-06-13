@@ -26,13 +26,18 @@ def generate_password(length: int = 10) -> str:
 
 
 def create_access_token(
-    user_id: int, role: str, impersonated_by: int | None = None
+    user_id: int, role: str, token_version: int, impersonated_by: int | None = None
 ) -> str:
-    """impersonated_by — id суперюзера, который смотрит систему от имени user_id."""
+    """impersonated_by — id суперюзера, который смотрит систему от имени user_id.
+
+    token_version вшивается в токен; рассинхрон с users.token_version
+    инвалидирует токен (смена пароля/деактивация отзывают все сессии).
+    """
     settings = get_settings()
     payload: dict = {
         "sub": str(user_id),
         "role": role,
+        "tv": token_version,
         "exp": datetime.now(timezone.utc) + timedelta(hours=settings.jwt_ttl_hours),
     }
     if impersonated_by is not None:

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.students import get_student_or_404
 from app.db import get_db
-from app.deps import require_roles
+from app.deps import get_current_user, require_roles
 from app.models import Role, Student, Transaction, User
 from app.schemas.finance import FinanceSummary, PaymentCreate, TransactionOut
 from app.services import finance
@@ -16,8 +16,12 @@ router = APIRouter(
 
 
 @router.get("/finance/summary", response_model=FinanceSummary)
-async def summary(db: AsyncSession = Depends(get_db)):
-    return await finance.finance_summary(db)
+async def summary(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    # Суперюзер вне режима просмотра не привязан к ученикам — пустая сводка
+    teacher_id = None if user.role == Role.superuser else user.id
+    return await finance.finance_summary(db, teacher_id=teacher_id)
 
 
 @router.get("/students/{student_id}/transactions", response_model=list[TransactionOut])

@@ -85,7 +85,7 @@ async function onAddComment() {
         <template #title>
           <div class="profile">
             <Avatar
-              :image="cabinet?.user.avatar_path ? `/media/${cabinet.user.avatar_path}` : undefined"
+              :image="cabinet?.user.avatar_path ? `/api/files/${cabinet.user.avatar_path}` : undefined"
               :label="cabinet?.user.avatar_path ? undefined : cabinet?.user.full_name?.[0]"
               size="xlarge"
               shape="circle"

@@ -2,12 +2,16 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings
 
+DEFAULT_JWT_SECRET = "dev-secret"
+
 
 class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://teacher:teacher@localhost:5432/teacher"
 
-    jwt_secret: str = "dev-secret"
+    jwt_secret: str = DEFAULT_JWT_SECRET
     jwt_ttl_hours: int = 24
+    # В проде дефолтный секрет запрещён; в dev/тестах допускается
+    dev_mode: bool = True
 
     superuser_email: str = "admin@example.com"
     superuser_password: str = "admin12345"
@@ -35,4 +39,9 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    if not settings.dev_mode and settings.jwt_secret == DEFAULT_JWT_SECRET:
+        raise RuntimeError(
+            "JWT_SECRET не задан: в проде (DEV_MODE=false) дефолтный секрет запрещён"
+        )
+    return settings

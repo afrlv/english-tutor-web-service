@@ -107,7 +107,7 @@ async def seed_users():
             db.add(user)
             users[key] = user
         await db.flush()
-        student = Student(user_id=users["student"].id)
+        student = Student(user_id=users["student"].id, teacher_id=users["teacher"].id)
         db.add(student)
         await db.flush()
         parent = Parent(

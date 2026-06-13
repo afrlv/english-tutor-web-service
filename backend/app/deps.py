@@ -26,6 +26,9 @@ async def get_current_user(
     user = await db.get(User, int(payload["sub"]))
     if user is None or not user.is_active:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Учётная запись недоступна")
+    # Рассинхрон версии токена = сессия отозвана (смена пароля/деактивация)
+    if payload.get("tv") != user.token_version:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Сессия устарела, войдите снова")
     return user
 
 
@@ -36,6 +39,11 @@ def require_roles(*roles: Role):
         return user
 
     return dependency
+
+
+def owns_student(user: User, student: Student) -> bool:
+    """Учитель владеет своими учениками; суперюзер — всеми."""
+    return user.role == Role.superuser or student.teacher_id == user.id
 
 
 async def get_own_student(
