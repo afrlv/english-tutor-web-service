@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     jwt_ttl_hours: int = 24
     # В проде дефолтный секрет запрещён; в dev/тестах допускается
     dev_mode: bool = True
+    # В проде (за HTTPS) включить — cookie только по защищённому соединению
+    secure_cookies: bool = False
 
     superuser_email: str = "admin@example.com"
     superuser_password: str = "admin12345"

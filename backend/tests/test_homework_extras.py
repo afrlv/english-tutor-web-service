@@ -53,6 +53,19 @@ async def test_attachment_bad_type_rejected(client, seed_users):
     assert resp.status_code == 422
 
 
+async def test_attachment_signature_mismatch_rejected(client, seed_users):
+    """Подделка content_type (exe под видом PDF) отсекается по сигнатуре."""
+    sid = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    hw = await create_homework(client, sid)
+    fake = io.BytesIO(b"MZ\x90\x00 not a pdf")
+    resp = await client.post(
+        f"/api/homeworks/{hw['id']}/attachments",
+        files={"file": ("evil.pdf", fake, "application/pdf")},
+    )
+    assert resp.status_code == 422
+
+
 async def test_student_answer_and_teacher_check(client, seed_users):
     sid = seed_users["student_id"]
     await login(client, "teacher@test.ru")

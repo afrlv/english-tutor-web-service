@@ -4,6 +4,7 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile, status
 
 from app.config import get_settings
+from app.services.file_signatures import matches_signature
 
 MAX_SIZE = 2 * 1024 * 1024  # 2 МБ
 ALLOWED_TYPES = {
@@ -24,6 +25,11 @@ async def save_avatar(file: UploadFile) -> str:
     if len(content) > MAX_SIZE:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT, "Файл больше 2 МБ"
+        )
+    if not matches_signature(file.content_type or "", content):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "Содержимое файла не соответствует типу",
         )
     avatars_dir = Path(get_settings().media_dir) / "avatars"
     avatars_dir.mkdir(parents=True, exist_ok=True)
