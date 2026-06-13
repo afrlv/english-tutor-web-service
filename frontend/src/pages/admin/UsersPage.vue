@@ -15,7 +15,9 @@ import { onMounted, ref } from "vue";
 import {
   adminCreateUser,
   adminDeleteUser,
+  adminListDeletedUsers,
   adminListUsers,
+  adminRestoreUser,
   adminSetPassword,
   adminUpdateUser,
 } from "../../api";
@@ -28,6 +30,8 @@ const confirm = useConfirm();
 const auth = useAuthStore();
 
 const users = ref<User[]>([]);
+const deletedUsers = ref<User[]>([]);
+const showDeleted = ref(false);
 const loading = ref(true);
 const createOpen = ref(false);
 const passwordUser = ref<User | null>(null);
@@ -58,8 +62,27 @@ async function load() {
   loading.value = true;
   try {
     users.value = await adminListUsers();
+    if (showDeleted.value) deletedUsers.value = await adminListDeletedUsers();
   } finally {
     loading.value = false;
+  }
+}
+
+async function toggleDeleted() {
+  showDeleted.value = !showDeleted.value;
+  if (showDeleted.value) deletedUsers.value = await adminListDeletedUsers();
+}
+
+async function onRestoreUser(user: User) {
+  try {
+    await adminRestoreUser(user.id);
+    toast.add({ severity: "success", summary: "Учётная запись восстановлена", life: 3000 });
+    await Promise.all([
+      (async () => (users.value = await adminListUsers()))(),
+      (async () => (deletedUsers.value = await adminListDeletedUsers()))(),
+    ]);
+  } catch (e) {
+    showError(e, "Не удалось восстановить учётную запись");
   }
 }
 
@@ -157,7 +180,16 @@ async function setPassword() {
       <template #title>
         <div class="header">
           Пользователи
-          <Button label="Создать" icon="pi pi-plus" @click="createOpen = true" />
+          <div class="header-actions">
+            <Button
+              :label="showDeleted ? 'Скрыть удалённые' : 'Удалённые'"
+              :icon="showDeleted ? 'pi pi-eye-slash' : 'pi pi-trash'"
+              severity="secondary"
+              text
+              @click="toggleDeleted"
+            />
+            <Button label="Создать" icon="pi pi-plus" @click="createOpen = true" />
+          </div>
         </div>
       </template>
       <template #content>
@@ -211,6 +243,34 @@ async function setPassword() {
                 size="small"
                 severity="danger"
                 @click="onDeleteUser(data)"
+              />
+            </template>
+          </Column>
+        </DataTable>
+      </template>
+    </Card>
+
+    <Card v-if="showDeleted" class="deleted-card">
+      <template #title>Удалённые учётные записи</template>
+      <template #content>
+        <DataTable :value="deletedUsers" data-key="id">
+          <template #empty>Удалённых учётных записей нет</template>
+          <Column field="id" header="ID" />
+          <Column field="full_name" header="Имя" />
+          <Column field="login" header="Логин" />
+          <Column field="email" header="Почта" />
+          <Column header="Роль">
+            <template #body="{ data }">{{ roleLabel(data.role) }}</template>
+          </Column>
+          <Column header="">
+            <template #body="{ data }">
+              <Button
+                label="Восстановить"
+                icon="pi pi-replay"
+                severity="success"
+                text
+                size="small"
+                @click="onRestoreUser(data)"
               />
             </template>
           </Column>
@@ -295,6 +355,9 @@ async function setPassword() {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.deleted-card {
+  margin-top: 1rem;
 }
 .header-actions {
   display: flex;

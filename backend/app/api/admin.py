@@ -72,6 +72,16 @@ async def _get_user(user_id: int, db: AsyncSession) -> User:
     return user
 
 
+# До /users/{user_id} — иначе «deleted» попадёт в параметр пути
+@router.get("/users/deleted", response_model=list[UserOut])
+async def list_deleted_users(db: AsyncSession = Depends(get_db)):
+    return (
+        await db.scalars(
+            select(User).where(User.deleted_at.is_not(None)).order_by(User.id)
+        )
+    ).all()
+
+
 @router.get("/users/{user_id}", response_model=UserOut)
 async def get_user(user_id: int, db: AsyncSession = Depends(get_db)):
     return await _get_user(user_id, db)
@@ -125,6 +135,33 @@ async def delete_user(
     user.is_active = False
     user.token_version += 1  # отзываем активные сессии удаляемого
     await db.commit()
+
+
+@router.post("/users/{user_id}/restore", response_model=UserOut)
+async def restore_user(user_id: int, db: AsyncSession = Depends(get_db)):
+    """Возвращает удалённую учётку: снимает deleted_at, снова активна."""
+    user = await db.get(User, user_id)
+    if user is None or user.deleted_at is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "Удалённая учётная запись не найдена"
+        )
+    # За время удаления почту/логин мог занять кто-то активный
+    clash = await db.scalar(
+        select(User).where(
+            User.id != user_id,
+            User.deleted_at.is_(None),
+            (User.email == user.email) | (User.login == user.login),
+        )
+    )
+    if clash is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Почта или логин уже заняты другой учётной записью",
+        )
+    user.deleted_at = None
+    user.is_active = True
+    await db.commit()
+    return user
 
 
 @router.post("/digest/send-now")

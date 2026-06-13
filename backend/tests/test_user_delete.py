@@ -60,6 +60,37 @@ async def test_deleted_student_disappears_from_teacher(client, seed_users):
     assert all(r["student_id"] != sid for r in summary["students"])
 
 
+async def test_restore_user(client, seed_users):
+    await login(client, "superuser@test.ru")
+    pid = await _user_id(client, "parent@test.ru")
+    await client.delete(f"/api/admin/users/{pid}")
+
+    # Удалённый — в списке удалённых
+    deleted = (await client.get("/api/admin/users/deleted")).json()
+    assert any(u["id"] == pid for u in deleted)
+
+    # Восстановление
+    resp = await client.post(f"/api/admin/users/{pid}/restore")
+    assert resp.status_code == 200
+    assert resp.json()["is_active"] is True
+
+    # Снова в активном списке и больше не в удалённых
+    assert any(u["id"] == pid for u in (await client.get("/api/admin/users")).json())
+    assert all(u["id"] != pid for u in (await client.get("/api/admin/users/deleted")).json())
+
+    # Вход снова работает
+    resp = await client.post(
+        "/api/auth/login", json={"login": "parent@test.ru", "password": PASSWORD}
+    )
+    assert resp.status_code == 200
+
+
+async def test_restore_non_deleted_is_404(client, seed_users):
+    await login(client, "superuser@test.ru")
+    pid = await _user_id(client, "parent@test.ru")
+    assert (await client.post(f"/api/admin/users/{pid}/restore")).status_code == 404
+
+
 async def test_deleted_session_revoked(client, seed_users):
     # Активная сессия ученика рвётся после удаления его учётки
     await login(client, "student@test.ru")
