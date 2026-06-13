@@ -19,6 +19,7 @@ import {
   cancelLesson,
   conductLesson,
   createLesson,
+  dashboardStats,
   deleteLesson,
   financeSummary,
   type LessonInput,
@@ -28,9 +29,15 @@ import {
   revertLesson,
   updateLesson,
 } from "../../api";
-import type { CalendarLesson, FinanceSummary, Student } from "../../api/types";
+import type {
+  CalendarLesson,
+  DashboardStats as DashboardStatsType,
+  FinanceSummary,
+  Student,
+} from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
 import BalanceCell from "../../components/BalanceCell.vue";
+import DashboardStats from "../../components/DashboardStats.vue";
 import CancelLessonDialog, { type CancelKind } from "../../components/CancelLessonDialog.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
@@ -39,6 +46,7 @@ import { cancellationLabels, statusLabel, statusSeverity } from "../../utils/les
 const router = useRouter();
 const toast = useToast();
 const summary = ref<FinanceSummary | null>(null);
+const stats = ref<DashboardStatsType | null>(null);
 const loading = ref(true);
 const students = ref<Student[]>([]);
 const calendarRef = ref<InstanceType<typeof FullCalendar> | null>(null);
@@ -125,7 +133,7 @@ function showError(e: unknown, fallback: string) {
 
 async function refresh() {
   calendarRef.value?.getApi().refetchEvents();
-  summary.value = await financeSummary();
+  [summary.value, stats.value] = await Promise.all([financeSummary(), dashboardStats()]);
 }
 
 async function saveLesson(data: LessonInput, studentId: number | null) {
@@ -234,7 +242,11 @@ function toStudentCard() {
 
 onMounted(async () => {
   try {
-    [summary.value, students.value] = await Promise.all([financeSummary(), listStudents()]);
+    [summary.value, students.value, stats.value] = await Promise.all([
+      financeSummary(),
+      listStudents(),
+      dashboardStats(),
+    ]);
   } finally {
     loading.value = false;
   }
@@ -244,12 +256,7 @@ onMounted(async () => {
 <template>
   <AppLayout>
     <div class="cards">
-      <Card>
-        <template #title>Заработано всего</template>
-        <template #content>
-          <span class="total">{{ formatMoney(summary?.total_earned ?? 0) }}</span>
-        </template>
-      </Card>
+      <DashboardStats v-if="stats" :stats="stats" />
 
       <Card>
         <template #title>

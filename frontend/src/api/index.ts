@@ -10,6 +10,7 @@ import type {
   Comment,
   EmailLogEntry,
   EmailSettings,
+  DashboardStats,
   FinanceSummary,
   Homework,
   HomeworkAttachment,
@@ -220,6 +221,8 @@ export const addComment = (studentId: number, body: string) =>
 // --- finance (teacher) ---
 export const financeSummary = () =>
   api.get<FinanceSummary>("/finance/summary").then((r) => r.data);
+export const dashboardStats = () =>
+  api.get<DashboardStats>("/dashboard/stats").then((r) => r.data);
 export const listTransactions = (studentId: number) =>
   api.get<Transaction[]>(`/students/${studentId}/transactions`).then((r) => r.data);
 export const addPayment = (studentId: number, amount: string, comment?: string) =>

@@ -16,6 +16,8 @@ class UserOut(BaseModel):
     avatar_path: str | None
     is_active: bool
     created_at: datetime
+    # Только в списке /admin/users для учителей: число их учеников
+    students_count: int | None = None
 
 
 class UserCreate(BaseModel):

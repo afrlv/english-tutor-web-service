@@ -163,6 +163,32 @@ export interface FinanceSummary {
   students: StudentFinance[];
 }
 
+export interface MonthEarning {
+  month: string; // "2026-06"
+  earned: string;
+}
+
+export interface DebtorRow {
+  student_id: number;
+  student_name: string;
+  debt: string;
+}
+
+export interface DashboardStats {
+  earned_this_month: string;
+  earned_prev_month: string;
+  earned_total: string;
+  monthly: MonthEarning[];
+  debt_total: string;
+  top_debtors: DebtorRow[];
+  students_total: number;
+  students_active: number;
+  students_quiet: number;
+  lessons_week_conducted: number;
+  lessons_week_planned: number;
+  lessons_month_conducted: number;
+}
+
 export interface Balance {
   lesson_price: string;
   charged: string;

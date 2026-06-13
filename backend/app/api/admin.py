@@ -2,9 +2,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy import func
+
 from app.db import get_db
 from app.deps import get_current_user, require_roles
-from app.models import EmailLog, Role, User
+from app.models import EmailLog, Role, Student, User
 from app.schemas.email import EmailLogOut, EmailSettingsIn, EmailSettingsOut
 from app.schemas.user import PasswordSet, UserCreate, UserOut, UserUpdate
 from app.security import hash_password
@@ -22,7 +24,22 @@ router = APIRouter(
 
 @router.get("/users", response_model=list[UserOut])
 async def list_users(db: AsyncSession = Depends(get_db)):
-    return (await db.scalars(select(User).order_by(User.id))).all()
+    users = (await db.scalars(select(User).order_by(User.id))).all()
+    # Число учеников по учителям — одним запросом
+    counts = dict(
+        (
+            await db.execute(
+                select(Student.teacher_id, func.count()).group_by(Student.teacher_id)
+            )
+        ).all()
+    )
+    result = []
+    for u in users:
+        out = UserOut.model_validate(u)
+        if u.role == Role.teacher:
+            out.students_count = counts.get(u.id, 0)
+        result.append(out)
+    return result
 
 
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
