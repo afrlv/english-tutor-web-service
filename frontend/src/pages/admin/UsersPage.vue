@@ -8,19 +8,24 @@ import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import Tag from "primevue/tag";
 import ToggleSwitch from "primevue/toggleswitch";
+import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import { onMounted, ref } from "vue";
 
 import {
   adminCreateUser,
+  adminDeleteUser,
   adminListUsers,
   adminSetPassword,
   adminUpdateUser,
 } from "../../api";
 import type { User } from "../../api/types";
+import { useAuthStore } from "../../stores/auth";
 import AppLayout from "../../components/AppLayout.vue";
 
 const toast = useToast();
+const confirm = useConfirm();
+const auth = useAuthStore();
 
 const users = ref<User[]>([]);
 const loading = ref(true);
@@ -113,6 +118,25 @@ async function changeRole(user: User, role: string) {
   }
 }
 
+function onDeleteUser(user: User) {
+  confirm.require({
+    message: `Удалить учётную запись «${user.full_name}» (${user.email})? Вход будет закрыт, учётка скроется. Данные в базе сохранятся.`,
+    header: "Удаление учётной записи",
+    acceptLabel: "Удалить",
+    rejectLabel: "Отмена",
+    acceptProps: { severity: "danger" },
+    accept: async () => {
+      try {
+        await adminDeleteUser(user.id);
+        toast.add({ severity: "success", summary: "Учётная запись удалена", life: 3000 });
+        await load();
+      } catch (e) {
+        showError(e, "Не удалось удалить учётную запись");
+      }
+    },
+  });
+}
+
 async function setPassword() {
   if (!passwordUser.value || !newPassword.value) return;
   try {
@@ -177,6 +201,16 @@ async function setPassword() {
                 text
                 size="small"
                 @click="passwordUser = data"
+              />
+              <Button
+                v-if="data.id !== auth.user?.id"
+                v-tooltip="'Удалить учётную запись'"
+                icon="pi pi-trash"
+                text
+                rounded
+                size="small"
+                severity="danger"
+                @click="onDeleteUser(data)"
               />
             </template>
           </Column>

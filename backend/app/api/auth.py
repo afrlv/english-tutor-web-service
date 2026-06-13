@@ -27,7 +27,10 @@ def _set_auth_cookie(response: Response, token: str) -> None:
 @router.post("/login", response_model=UserOut)
 async def login(data: LoginIn, response: Response, db: AsyncSession = Depends(get_db)):
     user = await db.scalar(
-        select(User).where((User.login == data.login) | (User.email == data.login))
+        select(User).where(
+            (User.login == data.login) | (User.email == data.login),
+            User.deleted_at.is_(None),
+        )
     )
     if user is None or not verify_password(data.password, user.hashed_password):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Неверный логин или пароль")

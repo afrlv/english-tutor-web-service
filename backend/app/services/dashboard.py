@@ -6,7 +6,14 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models import Lesson, LessonStatus, Student, Transaction, TransactionType
+from app.models import (
+    Lesson,
+    LessonStatus,
+    Student,
+    Transaction,
+    TransactionType,
+    User,
+)
 from app.schemas.dashboard import DashboardStats, DebtorRow, MonthEarning
 from app.services.finance import finance_summary
 
@@ -43,7 +50,11 @@ async def dashboard_stats(
     cutoff_30 = now - timedelta(days=30)
 
     student_ids = (
-        await db.scalars(select(Student.id).where(Student.teacher_id == teacher_id))
+        await db.scalars(
+            select(Student.id)
+            .join(User, User.id == Student.user_id)
+            .where(Student.teacher_id == teacher_id, User.deleted_at.is_(None))
+        )
     ).all()
 
     # Долги и общий заработок переиспользуем из finance_summary

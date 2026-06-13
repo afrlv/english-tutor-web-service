@@ -73,6 +73,7 @@ async def list_all_lessons(
         select(Lesson, User.full_name)
         .join(Student, Student.id == Lesson.student_id)
         .join(User, User.id == Student.user_id)
+        .where(User.deleted_at.is_(None))
         .order_by(Lesson.scheduled_at)
     )
     if user.role != Role.superuser:

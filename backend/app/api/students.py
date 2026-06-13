@@ -39,8 +39,12 @@ async def get_student_or_404(
     db: AsyncSession = Depends(get_db),
 ) -> Student:
     student = await db.get(Student, student_id)
-    # Чужой ученик неотличим от несуществующего — единый 404 (без раскрытия id)
-    if student is None or not owns_student(user, student):
+    # Чужой/удалённый ученик неотличим от несуществующего — единый 404
+    if (
+        student is None
+        or not owns_student(user, student)
+        or student.user.deleted_at is not None
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Ученик не найден")
     return student
 
@@ -49,7 +53,12 @@ async def get_student_or_404(
 async def list_students(
     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ):
-    query = select(Student).order_by(Student.id)
+    query = (
+        select(Student)
+        .join(User, User.id == Student.user_id)
+        .where(User.deleted_at.is_(None))
+        .order_by(Student.id)
+    )
     if user.role != Role.superuser:
         query = query.where(Student.teacher_id == user.id)
     return (await db.scalars(query)).all()
@@ -150,7 +159,11 @@ async def list_parents(
     db: AsyncSession = Depends(get_db),
 ):
     return (
-        await db.scalars(select(Parent).where(Parent.student_id == student.id))
+        await db.scalars(
+            select(Parent)
+            .join(User, User.id == Parent.user_id)
+            .where(Parent.student_id == student.id, User.deleted_at.is_(None))
+        )
     ).all()
 
 

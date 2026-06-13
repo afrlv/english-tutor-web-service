@@ -1,6 +1,7 @@
 import enum
+from datetime import datetime
 
-from sqlalchemy import Boolean, Enum, Integer, String
+from sqlalchemy import Boolean, DateTime, Enum, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, CreatedAtMixin
@@ -27,3 +28,5 @@ class User(Base, CreatedAtMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     # Версия токена: инкремент инвалидирует все ранее выданные JWT
     token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Мягкое удаление: не-NULL → учётка удалена (скрыта, вход закрыт; данные целы)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

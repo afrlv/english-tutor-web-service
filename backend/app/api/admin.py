@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from datetime import datetime, timezone
+
 from sqlalchemy import func
 
 from app.db import get_db
@@ -24,12 +26,19 @@ router = APIRouter(
 
 @router.get("/users", response_model=list[UserOut])
 async def list_users(db: AsyncSession = Depends(get_db)):
-    users = (await db.scalars(select(User).order_by(User.id))).all()
+    users = (
+        await db.scalars(
+            select(User).where(User.deleted_at.is_(None)).order_by(User.id)
+        )
+    ).all()
     # Число учеников по учителям — одним запросом
     counts = dict(
         (
             await db.execute(
-                select(Student.teacher_id, func.count()).group_by(Student.teacher_id)
+                select(Student.teacher_id, func.count())
+                .join(User, User.id == Student.user_id)
+                .where(User.deleted_at.is_(None))
+                .group_by(Student.teacher_id)
             )
         ).all()
     )
@@ -58,7 +67,7 @@ async def create_user_endpoint(data: UserCreate, db: AsyncSession = Depends(get_
 
 async def _get_user(user_id: int, db: AsyncSession) -> User:
     user = await db.get(User, user_id)
-    if user is None:
+    if user is None or user.deleted_at is not None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователь не найден")
     return user
 
@@ -100,6 +109,22 @@ async def set_password(
     user.token_version += 1  # сброс пароля админом отзывает прежние сессии
     await db.commit()
     return {"detail": "Пароль установлен"}
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: int,
+    current: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Мягкое удаление учётки: скрывается и теряет доступ; данные в БД целы."""
+    if user_id == current.id:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Нельзя удалить самого себя")
+    user = await _get_user(user_id, db)
+    user.deleted_at = datetime.now(timezone.utc)
+    user.is_active = False
+    user.token_version += 1  # отзываем активные сессии удаляемого
+    await db.commit()
 
 
 @router.post("/digest/send-now")

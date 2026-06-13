@@ -24,7 +24,7 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> User:
     user = await db.get(User, int(payload["sub"]))
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.deleted_at is not None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Учётная запись недоступна")
     # Рассинхрон версии токена = сессия отозвана (смена пароля/деактивация)
     if payload.get("tv") != user.token_version:

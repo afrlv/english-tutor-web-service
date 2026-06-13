@@ -33,6 +33,7 @@ async def compose_digest_lines(
             Lesson.scheduled_at >= day_start,
             Lesson.scheduled_at < day_end,
             Lesson.status == LessonStatus.planned,
+            User.deleted_at.is_(None),
         )
         .order_by(Lesson.scheduled_at)
     )

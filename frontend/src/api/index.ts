@@ -52,6 +52,7 @@ export const adminUpdateUser = (id: number, data: Partial<User>) =>
   api.patch<User>(`/admin/users/${id}`, data).then((r) => r.data);
 export const adminSetPassword = (id: number, password: string) =>
   api.post(`/admin/users/${id}/password`, { password });
+export const adminDeleteUser = (id: number) => api.delete(`/admin/users/${id}`);
 export const adminSendDigest = () => api.post("/admin/digest/send-now");
 export const getEmailSettings = () =>
   api.get<EmailSettings>("/admin/email-settings").then((r) => r.data);

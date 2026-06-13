@@ -184,6 +184,7 @@ async def finance_summary(
         .join(User, User.id == Student.user_id)
         .outerjoin(Parent, Parent.student_id == Student.id)
         .outerjoin(Transaction, Transaction.student_id == Student.id)
+        .where(User.deleted_at.is_(None))
         .group_by(Student.id, User.full_name)
         .order_by(User.full_name)
     )
