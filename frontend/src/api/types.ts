@@ -118,6 +118,7 @@ export interface Card {
 export interface CardSet {
   id: number;
   student_id: number;
+  lesson_id: number | null;
   title: string;
   cards: Card[];
 }
@@ -125,6 +126,7 @@ export interface CardSet {
 export interface CardSetSummary {
   id: number;
   student_id: number;
+  lesson_id: number | null;
   title: string;
   total: number;
   learned: number;

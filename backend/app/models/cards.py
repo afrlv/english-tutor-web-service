@@ -5,12 +5,19 @@ from app.models.base import Base, CreatedAtMixin
 
 
 class CardSet(Base, CreatedAtMixin):
-    """Набор карточек «слово – перевод» для конкретного ученика."""
+    """Набор карточек «слово – перевод» для ученика.
+
+    lesson_id — необязательная привязка к уроку (слова конкретного занятия);
+    при удалении урока набор остаётся у ученика (SET NULL).
+    """
 
     __tablename__ = "card_sets"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), index=True)
+    lesson_id: Mapped[int | None] = mapped_column(
+        ForeignKey("lessons.id", ondelete="SET NULL"), index=True
+    )
     title: Mapped[str] = mapped_column(String(255))
 
     cards: Mapped[list["Card"]] = relationship(

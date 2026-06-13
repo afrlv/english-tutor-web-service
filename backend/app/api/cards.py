@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.students import get_student_or_404
 from app.db import get_db
 from app.deps import get_own_student, require_roles
-from app.models import Card, CardSet, Role, Student
+from app.models import Card, CardSet, Lesson, Role, Student
 from app.schemas.cards import (
     AnswerIn,
     CardIn,
@@ -61,6 +61,52 @@ async def create_set(
     db: AsyncSession = Depends(get_db),
 ):
     card_set = CardSet(student_id=student.id, title=data.title)
+    db.add(card_set)
+    await db.flush()
+    for i, card in enumerate(data.cards):
+        db.add(Card(set_id=card_set.id, front=card.front, back=card.back, position=i))
+    await db.commit()
+    await db.refresh(card_set)
+    return card_set
+
+
+async def get_lesson_or_404(lesson_id: int, db: AsyncSession = Depends(get_db)) -> Lesson:
+    lesson = await db.get(Lesson, lesson_id)
+    if lesson is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Урок не найден")
+    return lesson
+
+
+@router.get(
+    "/lessons/{lesson_id}/card-sets",
+    response_model=list[CardSetSummary],
+    dependencies=[teacher_only],
+)
+async def list_lesson_sets(
+    lesson: Lesson = Depends(get_lesson_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    sets = (
+        await db.scalars(
+            select(CardSet).where(CardSet.lesson_id == lesson.id).order_by(CardSet.id)
+        )
+    ).all()
+    return [set_summary(s) for s in sets]
+
+
+@router.post(
+    "/lessons/{lesson_id}/card-sets",
+    response_model=CardSetOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[teacher_only],
+)
+async def create_lesson_set(
+    data: CardSetCreate,
+    lesson: Lesson = Depends(get_lesson_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    """Набор для урока — принадлежит ученику урока, привязан к уроку."""
+    card_set = CardSet(student_id=lesson.student_id, lesson_id=lesson.id, title=data.title)
     db.add(card_set)
     await db.flush()
     for i, card in enumerate(data.cards):
@@ -161,6 +207,22 @@ async def my_sets(
     sets = (
         await db.scalars(
             select(CardSet).where(CardSet.student_id == student.id).order_by(CardSet.id)
+        )
+    ).all()
+    return [set_summary(s) for s in sets]
+
+
+@router.get("/me/lessons/{lesson_id}/card-sets", response_model=list[CardSetSummary])
+async def my_lesson_sets(
+    lesson_id: int,
+    student: Student = Depends(get_own_student),
+    db: AsyncSession = Depends(get_db),
+):
+    sets = (
+        await db.scalars(
+            select(CardSet)
+            .where(CardSet.lesson_id == lesson_id, CardSet.student_id == student.id)
+            .order_by(CardSet.id)
         )
     ).all()
     return [set_summary(s) for s in sets]

@@ -19,12 +19,16 @@ import {
   addLessonLink,
   cancelLesson,
   conductLesson,
+  createLessonCardSet,
   deleteAttachment,
+  deleteCardSet,
   deleteHomework,
   deleteLesson,
   deleteLessonAttachment,
+  getCardSet,
   getLessonDetail,
   type LessonInput,
+  listLessonCardSets,
   restoreLesson,
   revertLesson,
   updateHomework,
@@ -32,10 +36,11 @@ import {
   uploadHomeworkFile,
   uploadLessonFile,
 } from "../../api";
-import type { CalendarLesson } from "../../api/types";
+import type { CalendarLesson, CardSet, CardSetSummary } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
 import AttachmentList from "../../components/AttachmentList.vue";
 import CancelLessonDialog, { type CancelKind } from "../../components/CancelLessonDialog.vue";
+import CardSetEditor from "../../components/CardSetEditor.vue";
 import LessonDialog from "../../components/LessonDialog.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
 import { cancellationLabels, statusLabel, statusSeverity } from "../../utils/lessons";
@@ -64,6 +69,10 @@ const uploadHwId = ref<number | null>(null);
 const hwLinkId = ref<number | null>(null);
 const hwLinkUrl = ref("");
 const hwLinkName = ref("");
+// наборы карточек урока
+const cardSets = ref<CardSetSummary[]>([]);
+const newSetTitle = ref("");
+const openSet = ref<CardSet | null>(null);
 
 const gradeOptions = [2, 3, 4, 5].map((g) => ({ label: String(g), value: g }));
 
@@ -76,6 +85,7 @@ function showError(e: unknown, fallback: string) {
 async function load() {
   try {
     lesson.value = await getLessonDetail(lessonId.value);
+    cardSets.value = await listLessonCardSets(lessonId.value);
   } catch {
     router.push("/students");
   }
@@ -248,6 +258,33 @@ async function onAddHwLink() {
 async function onRemoveHwAttachment(id: number) {
   await deleteAttachment(id);
   await load();
+}
+
+// --- карточки для запоминания ---
+
+async function onCreateSet() {
+  if (!newSetTitle.value.trim()) return;
+  try {
+    const created = await createLessonCardSet(lessonId.value, newSetTitle.value.trim());
+    newSetTitle.value = "";
+    cardSets.value = await listLessonCardSets(lessonId.value);
+    openSet.value = created; // сразу открываем для наполнения словами
+  } catch (e) {
+    showError(e, "Не удалось создать набор");
+  }
+}
+
+async function onOpenSet(setId: number) {
+  openSet.value = await getCardSet(setId);
+}
+
+async function onSetChanged() {
+  cardSets.value = await listLessonCardSets(lessonId.value);
+}
+
+async function onDeleteSet(setId: number) {
+  await deleteCardSet(setId);
+  cardSets.value = await listLessonCardSets(lessonId.value);
 }
 </script>
 
@@ -435,10 +472,49 @@ async function onRemoveHwAttachment(id: number) {
           </form>
         </template>
       </Card>
+
+      <Card>
+        <template #title>Карточки для запоминания</template>
+        <template #content>
+          <div v-for="s in cardSets" :key="s.id" class="set-row">
+            <span class="set-title">{{ s.title }}</span>
+            <Tag
+              :value="`${s.learned} / ${s.total} выучено`"
+              :severity="s.total > 0 && s.learned === s.total ? 'success' : 'secondary'"
+            />
+            <Button label="Открыть" icon="pi pi-pencil" text size="small" @click="onOpenSet(s.id)" />
+            <Button
+              icon="pi pi-trash"
+              text
+              rounded
+              size="small"
+              severity="danger"
+              @click="onDeleteSet(s.id)"
+            />
+          </div>
+          <p v-if="!cardSets.length" class="muted">
+            Наборов для этого урока нет. Создайте набор слов — ученик увидит его
+            на карточке урока и в своём кабинете.
+          </p>
+          <form class="set-add" @submit.prevent="onCreateSet">
+            <InputText v-model="newSetTitle" placeholder="Название набора (напр. Слова Unit 3)" fluid />
+            <Button type="submit" label="Создать набор" icon="pi pi-plus" :disabled="!newSetTitle.trim()" />
+          </form>
+        </template>
+      </Card>
     </template>
 
     <LessonDialog v-model:visible="editOpen" :lesson="lesson" @save="saveEdit" />
     <CancelLessonDialog v-model:visible="cancelOpen" @confirm="onCancelConfirm" />
+
+    <Dialog
+      :visible="openSet !== null"
+      :header="openSet?.title"
+      modal
+      @update:visible="openSet = null"
+    >
+      <CardSetEditor v-if="openSet" :card-set="openSet" @changed="onSetChanged" />
+    </Dialog>
 
     <Dialog
       :visible="hwLinkId !== null"
@@ -543,6 +619,23 @@ async function onRemoveHwAttachment(id: number) {
   flex-direction: column;
   gap: 0.75rem;
   min-width: 22rem;
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--p-surface-200);
+}
+.set-title {
+  font-weight: 600;
+  flex: 1;
+}
+.set-add {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  max-width: 32rem;
 }
 :deep(.p-card) {
   margin-bottom: 1rem;

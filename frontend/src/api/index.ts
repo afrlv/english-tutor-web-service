@@ -186,6 +186,13 @@ export const createCardSet = (
   title: string,
   cards: { front: string; back: string }[],
 ) => api.post<CardSet>(`/students/${studentId}/card-sets`, { title, cards }).then((r) => r.data);
+// наборы конкретного урока
+export const listLessonCardSets = (lessonId: number) =>
+  api.get<CardSetSummary[]>(`/lessons/${lessonId}/card-sets`).then((r) => r.data);
+export const createLessonCardSet = (lessonId: number, title: string) =>
+  api.post<CardSet>(`/lessons/${lessonId}/card-sets`, { title, cards: [] }).then((r) => r.data);
+export const myLessonCardSets = (lessonId: number) =>
+  api.get<CardSetSummary[]>(`/me/lessons/${lessonId}/card-sets`).then((r) => r.data);
 export const getCardSet = (setId: number) =>
   api.get<CardSet>(`/card-sets/${setId}`).then((r) => r.data);
 export const renameCardSet = (setId: number, title: string) =>

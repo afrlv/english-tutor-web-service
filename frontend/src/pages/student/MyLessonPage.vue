@@ -8,8 +8,8 @@ import { useToast } from "primevue/usetoast";
 import { ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-import { markHomework, myLesson } from "../../api";
-import type { Lesson } from "../../api/types";
+import { markHomework, myLesson, myLessonCardSets } from "../../api";
+import type { CardSetSummary, Lesson } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
 import AttachmentList from "../../components/AttachmentList.vue";
 import { formatDateTime } from "../../utils/format";
@@ -21,11 +21,13 @@ const toast = useToast();
 const lessonId = Number(route.params.id);
 
 const lesson = ref<Lesson | null>(null);
+const cardSets = ref<CardSetSummary[]>([]);
 const answerDrafts = ref<Record<number, string>>({});
 
 async function load() {
   try {
     lesson.value = await myLesson(lessonId);
+    cardSets.value = await myLessonCardSets(lessonId);
   } catch {
     router.push("/cabinet");
   }
@@ -75,6 +77,22 @@ async function onSaveAnswer(hwId: number) {
         <template #title>Материалы урока</template>
         <template #content>
           <AttachmentList :attachments="lesson.attachments" />
+        </template>
+      </Card>
+
+      <Card v-if="cardSets.length" class="mb">
+        <template #title>Карточки для запоминания</template>
+        <template #content>
+          <div v-for="s in cardSets" :key="s.id" class="set-row">
+            <span class="set-title">{{ s.title }}</span>
+            <span class="set-progress">{{ s.learned }} / {{ s.total }} выучено</span>
+            <Button
+              label="Учить"
+              icon="pi pi-play"
+              size="small"
+              @click="router.push(`/study/${s.id}`)"
+            />
+          </div>
         </template>
       </Card>
 
@@ -186,5 +204,19 @@ async function onSaveAnswer(hwId: number) {
 }
 .muted {
   color: var(--p-text-muted-color);
+}
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.4rem 0;
+}
+.set-title {
+  font-weight: 600;
+  flex: 1;
+}
+.set-progress {
+  color: var(--p-text-muted-color);
+  font-size: 0.9rem;
 }
 </style>

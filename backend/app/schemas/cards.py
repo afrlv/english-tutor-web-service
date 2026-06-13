@@ -38,6 +38,7 @@ class CardSetOut(BaseModel):
 
     id: int
     student_id: int
+    lesson_id: int | None
     title: str
     cards: list[CardOut]
 
@@ -47,6 +48,7 @@ class CardSetSummary(BaseModel):
 
     id: int
     student_id: int
+    lesson_id: int | None
     title: str
     total: int
     learned: int
@@ -60,6 +62,7 @@ def set_summary(s) -> CardSetSummary:
     return CardSetSummary(
         id=s.id,
         student_id=s.student_id,
+        lesson_id=s.lesson_id,
         title=s.title,
         total=len(s.cards),
         learned=sum(1 for c in s.cards if c.times_correct >= LEARNED_THRESHOLD),

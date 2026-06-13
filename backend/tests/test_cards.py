@@ -84,6 +84,54 @@ async def test_student_cannot_access_foreign_or_manage(client, seed_users):
     assert (await client.get("/api/me/card-sets")).status_code == 403
 
 
+async def test_lesson_card_sets(client, seed_users):
+    sid = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    from tests.test_lessons import create_lesson
+
+    lesson = await create_lesson(client, sid)
+    resp = await client.post(
+        f"/api/lessons/{lesson['id']}/card-sets",
+        json={"title": "Слова урока", "cards": [{"front": "cat", "back": "кот"}]},
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["lesson_id"] == lesson["id"]
+    assert body["student_id"] == sid
+
+    # Набор виден в списке урока
+    lesson_sets = (await client.get(f"/api/lessons/{lesson['id']}/card-sets")).json()
+    assert len(lesson_sets) == 1
+    assert lesson_sets[0]["lesson_id"] == lesson["id"]
+
+    # И в общем списке ученика (для повторения в кабинете)
+    all_sets = (await client.get(f"/api/students/{sid}/card-sets")).json()
+    assert len(all_sets) == 1
+
+    # Ученик видит набор урока на его карточке
+    await login(client, "student@test.ru")
+    my = (await client.get(f"/api/me/lessons/{lesson['id']}/card-sets")).json()
+    assert len(my) == 1
+    assert my[0]["title"] == "Слова урока"
+
+
+async def test_set_survives_lesson_delete(client, seed_users):
+    sid = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    from tests.test_lessons import create_lesson
+
+    lesson = await create_lesson(client, sid)
+    await client.post(
+        f"/api/lessons/{lesson['id']}/card-sets", json={"title": "Набор", "cards": []}
+    )
+    assert (await client.delete(f"/api/lessons/{lesson['id']}")).status_code == 204
+
+    # Набор остаётся у ученика, но уже без привязки к уроку
+    all_sets = (await client.get(f"/api/students/{sid}/card-sets")).json()
+    assert len(all_sets) == 1
+    assert all_sets[0]["lesson_id"] is None
+
+
 async def test_delete_set_cascades(client, seed_users):
     sid = seed_users["student_id"]
     await login(client, "teacher@test.ru")
