@@ -102,6 +102,10 @@ const paymentAmount = ref<number | null>(null);
 const paymentComment = ref("");
 
 const lessonPrice = computed(() => parseFloat(parents.value[0]?.lesson_price ?? "0"));
+// Список уроков: по возрастанию даты (ранняя сверху)
+const sortedLessons = computed(() =>
+  lessons.value.slice().sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)),
+);
 // История занятий: проведённые уроки, новые сверху
 const conductedLessons = computed(() =>
   lessons.value
@@ -464,7 +468,7 @@ async function onSetPassword() {
                 />
               </div>
               <Button label="Новый урок" icon="pi pi-plus" class="mb" @click="openCreateLesson" />
-              <DataTable :value="lessons" data-key="id">
+              <DataTable :value="sortedLessons" data-key="id">
                 <template #empty>Уроков пока нет</template>
                 <Column header="Когда">
                   <template #body="{ data }">
