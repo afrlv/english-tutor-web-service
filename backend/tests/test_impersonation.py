@@ -25,7 +25,7 @@ async def test_stop_impersonation_restores_superuser(client, seed_users):
     await client.post(
         "/api/auth/impersonate", json={"user_id": seed_users["users"]["parent"].id}
     )
-    assert (await client.get("/api/parent/balance")).status_code == 200
+    assert (await client.get("/api/parent/children")).status_code == 200
 
     resp = await client.post("/api/auth/impersonate/stop")
     assert resp.status_code == 200

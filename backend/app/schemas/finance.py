@@ -44,3 +44,21 @@ class BalanceOut(BaseModel):
     paid: Decimal
     debt: Decimal
     transactions: list[TransactionOut]
+
+
+class ChildBalance(BaseModel):
+    """Краткий баланс одного ребёнка для обзора родителя."""
+
+    student_id: int
+    student_name: str
+    lesson_price: Decimal
+    charged: Decimal
+    paid: Decimal
+    debt: Decimal
+
+
+class ParentOverview(BaseModel):
+    """Обзор кабинета родителя: дети + суммарный долг."""
+
+    children: list[ChildBalance]
+    total_debt: Decimal

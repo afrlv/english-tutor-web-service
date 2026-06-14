@@ -16,6 +16,7 @@ from app.models import (
 from app.schemas.comment import CommentCreate, CommentOut
 from app.schemas.student import (
     AttachStudentIn,
+    ParentAttach,
     ParentCreate,
     ParentOut,
     ParentUpdate,
@@ -23,6 +24,7 @@ from app.schemas.student import (
     StudentCreate,
     StudentTeacherOut,
     StudentUpdate,
+    TeacherParentOut,
     UnassignedStudentOut,
 )
 from app.schemas.user import PasswordSet
@@ -267,6 +269,70 @@ async def create_parent(
     )
     parent = Parent(
         user_id=user.id,
+        student_id=student.id,
+        lesson_price=data.lesson_price,
+        recommendations=data.recommendations,
+    )
+    db.add(parent)
+    await db.commit()
+    await db.refresh(parent)
+    return parent
+
+
+@router.get("/teacher/parents", response_model=list[TeacherParentOut])
+async def list_teacher_parents(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    """Родители учеников учителя (для выбора при привязке второго ребёнка)."""
+    query = (
+        select(
+            User.id, User.full_name, User.email, func.count(Parent.id).label("cnt")
+        )
+        .join(Parent, Parent.user_id == User.id)
+        .join(Student, Student.id == Parent.student_id)
+        .where(User.deleted_at.is_(None))
+        .group_by(User.id, User.full_name, User.email)
+        .order_by(User.full_name)
+    )
+    if user.role != Role.superuser:
+        query = query.where(Student.teacher_id == user.id)
+    rows = (await db.execute(query)).all()
+    return [
+        TeacherParentOut(user_id=uid, full_name=name, email=email, children_count=cnt)
+        for uid, name, email, cnt in rows
+    ]
+
+
+@router.post(
+    "/students/{student_id}/parents/attach",
+    response_model=ParentOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def attach_parent(
+    data: ParentAttach,
+    student: Student = Depends(get_student_or_404),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Привязывает существующего родителя (другого ученика) к этому ученику."""
+    existing = await db.scalar(select(Parent).where(Parent.student_id == student.id))
+    if existing is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "У ученика уже есть карточка родителя"
+        )
+    target = await db.get(User, data.parent_user_id)
+    if target is None or target.role != Role.parent or target.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Родитель не найден")
+    # Родитель должен уже вести ребёнка у этого учителя — иначе чужой
+    is_my_parent = await db.scalar(
+        select(Parent.id)
+        .join(Student, Student.id == Parent.student_id)
+        .where(Parent.user_id == target.id, Student.teacher_id == student.teacher_id)
+    )
+    if is_my_parent is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Родитель не найден")
+    parent = Parent(
+        user_id=target.id,
         student_id=student.id,
         lesson_price=data.lesson_price,
         recommendations=data.recommendations,

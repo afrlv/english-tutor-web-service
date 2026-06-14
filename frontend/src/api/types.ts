@@ -250,3 +250,24 @@ export interface ChildCard {
   recommendations: string | null;
   lessons: Lesson[];
 }
+
+export interface ChildBalance {
+  student_id: number;
+  student_name: string;
+  lesson_price: string;
+  charged: string;
+  paid: string;
+  debt: string;
+}
+
+export interface ParentOverview {
+  children: ChildBalance[];
+  total_debt: string;
+}
+
+export interface TeacherParent {
+  user_id: number;
+  full_name: string;
+  email: string;
+  children_count: number;
+}

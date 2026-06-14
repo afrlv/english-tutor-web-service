@@ -56,11 +56,14 @@ async def get_own_student(
     return student
 
 
-async def get_own_parent(
+async def get_own_parents(
     user: User = Depends(require_roles(Role.parent)),
     db: AsyncSession = Depends(get_db),
-) -> Parent:
-    parent = await db.scalar(select(Parent).where(Parent.user_id == user.id))
-    if parent is None:
+) -> list[Parent]:
+    """Все карточки родителя (по одной на ребёнка)."""
+    parents = (
+        await db.scalars(select(Parent).where(Parent.user_id == user.id))
+    ).all()
+    if not parents:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Карточка родителя не найдена")
-    return parent
+    return list(parents)

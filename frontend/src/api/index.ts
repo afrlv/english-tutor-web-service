@@ -17,6 +17,8 @@ import type {
   Lesson,
   LessonAttachment,
   Parent,
+  ParentOverview,
+  TeacherParent,
   Progress,
   ScheduleSlot,
   Student,
@@ -278,5 +280,16 @@ export const addMyComment = (body: string) =>
   api.post<Comment>("/me/comments", { body }).then((r) => r.data);
 
 // --- parent ---
-export const fetchChild = () => api.get<ChildCard>("/parent/child").then((r) => r.data);
-export const fetchBalance = () => api.get<Balance>("/parent/balance").then((r) => r.data);
+export const fetchChildren = () =>
+  api.get<ParentOverview>("/parent/children").then((r) => r.data);
+export const fetchChild = (studentId: number) =>
+  api.get<ChildCard>(`/parent/child/${studentId}`).then((r) => r.data);
+export const fetchBalance = (studentId: number) =>
+  api.get<Balance>(`/parent/balance/${studentId}`).then((r) => r.data);
+// учитель: список родителей для привязки второго ребёнка
+export const listTeacherParents = () =>
+  api.get<TeacherParent[]>("/teacher/parents").then((r) => r.data);
+export const attachParent = (
+  studentId: number,
+  data: { parent_user_id: number; lesson_price: string; recommendations?: string },
+) => api.post<Parent>(`/students/${studentId}/parents/attach`, data).then((r) => r.data);
