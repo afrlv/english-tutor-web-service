@@ -158,6 +158,34 @@ async function onAddComment() {
         </template>
       </Card>
 
+      <Card>
+        <template #title>Прошедшие уроки</template>
+        <template #content>
+          <DataTable
+            :value="past"
+            selection-mode="single"
+            @row-select="(e) => $router.push(`/my-lessons/${e.data.id}`)"
+          >
+            <template #empty>Проведённых уроков пока нет</template>
+            <Column header="Когда">
+              <template #body="{ data }">{{ formatDateTime(data.scheduled_at) }}</template>
+            </Column>
+            <Column field="topic" header="Что проходили" />
+            <Column header="">
+              <template #body="{ data }">
+                <Button
+                  label="Открыть урок"
+                  icon="pi pi-book"
+                  text
+                  size="small"
+                  @click="$router.push(`/my-lessons/${data.id}`)"
+                />
+              </template>
+            </Column>
+          </DataTable>
+        </template>
+      </Card>
+
       <Card v-if="pendingHomework.length">
         <template #title>Невыполненные задания</template>
         <template #content>
@@ -225,34 +253,6 @@ async function onAddComment() {
               @click="$router.push(`/study/${s.id}`)"
             />
           </div>
-        </template>
-      </Card>
-
-      <Card>
-        <template #title>Прошедшие уроки</template>
-        <template #content>
-          <DataTable
-            :value="past"
-            selection-mode="single"
-            @row-select="(e) => $router.push(`/my-lessons/${e.data.id}`)"
-          >
-            <template #empty>Проведённых уроков пока нет</template>
-            <Column header="Когда">
-              <template #body="{ data }">{{ formatDateTime(data.scheduled_at) }}</template>
-            </Column>
-            <Column field="topic" header="Что проходили" />
-            <Column header="">
-              <template #body="{ data }">
-                <Button
-                  label="Открыть урок"
-                  icon="pi pi-book"
-                  text
-                  size="small"
-                  @click="$router.push(`/my-lessons/${data.id}`)"
-                />
-              </template>
-            </Column>
-          </DataTable>
         </template>
       </Card>
 
