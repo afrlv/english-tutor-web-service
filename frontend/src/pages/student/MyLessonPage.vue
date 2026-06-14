@@ -64,7 +64,12 @@ async function onSaveAnswer(hwId: number) {
           </div>
         </template>
         <template #content>
-          <a v-if="lesson.zoom_link" :href="lesson.zoom_link" target="_blank">
+          <a
+            v-if="lesson.zoom_link || lesson.student_default_zoom_link"
+            :href="lesson.zoom_link || lesson.student_default_zoom_link || undefined"
+            target="_blank"
+            rel="noopener"
+          >
             <Button label="Подключиться к Zoom" icon="pi pi-video" />
           </a>
           <p v-if="lesson.recommendation" class="pre rec">

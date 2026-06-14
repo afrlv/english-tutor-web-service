@@ -70,11 +70,11 @@ function openPdf(a: AttachmentLike) {
         </button>
       </template>
 
-      <!-- Прочее (файлы, обычные ссылки): ссылка с иконкой -->
-      <span v-else class="item">
-        <i :class="a.url ? 'pi pi-link' : 'pi pi-paperclip'" />
-        <a :href="href(a)" target="_blank" rel="noopener">{{ a.name }}</a>
-      </span>
+      <!-- Прочее (файлы, обычные ссылки): плитка с иконкой и подписью -->
+      <a v-else :href="href(a)" target="_blank" rel="noopener" class="tile">
+        <i :class="a.url ? 'pi pi-external-link' : 'pi pi-file'" />
+        <span class="tile-name">{{ a.name }}</span>
+      </a>
 
       <Button
         v-if="removable"
@@ -161,7 +161,8 @@ function openPdf(a: AttachmentLike) {
   border-radius: 6px;
   padding: 0.1rem 0.5rem;
 }
-.pdf-tile {
+.pdf-tile,
+.tile {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -175,15 +176,22 @@ function openPdf(a: AttachmentLike) {
   background: var(--p-surface-0);
   cursor: pointer;
   font: inherit;
+  text-decoration: none;
 }
-.pdf-tile:hover {
+.pdf-tile:hover,
+.tile:hover {
   border-color: var(--p-primary-color);
 }
 .pdf-tile .pi-file-pdf {
   font-size: 2.2rem;
   color: #d32f2f;
 }
-.pdf-name {
+.tile .pi {
+  font-size: 2.2rem;
+  color: var(--p-primary-color);
+}
+.pdf-name,
+.tile-name {
   font-size: 0.8rem;
   text-align: center;
   word-break: break-word;

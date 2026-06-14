@@ -13,9 +13,14 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
+from typing import TYPE_CHECKING
+
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin
+
+if TYPE_CHECKING:
+    from app.models.student import Student
 
 
 class LessonStatus(str, enum.Enum):
@@ -67,6 +72,12 @@ class Lesson(Base, CreatedAtMixin):
     attachments: Mapped[list["LessonAttachment"]] = relationship(
         cascade="all, delete-orphan", lazy="selectin"
     )
+    student: Mapped["Student"] = relationship(lazy="selectin")
+
+    @property
+    def student_default_zoom_link(self) -> str | None:
+        """Постоянная zoom-ссылка из профиля ученика — fallback к zoom урока."""
+        return self.student.default_zoom_link if self.student else None
 
 
 from app.models.attachment import LessonAttachment  # noqa: E402

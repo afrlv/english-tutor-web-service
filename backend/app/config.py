@@ -39,6 +39,8 @@ class Settings(BaseSettings):
     study_daily_limit: int = 20
 
     media_dir: str = "media"
+    # Адрес сайта для ссылки в письмах (вход в кабинет). В проде — http(s)://домен/IP
+    site_url: str = ""
 
 
 @lru_cache
