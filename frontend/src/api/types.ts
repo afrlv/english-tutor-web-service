@@ -78,6 +78,7 @@ export interface Lesson {
   price: string | null;
   topic: string | null;
   zoom_link: string | null;
+  student_default_zoom_link?: string | null;
   recommendation: string | null;
   status: LessonStatus;
   conducted_at: string | null;

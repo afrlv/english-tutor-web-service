@@ -1,12 +1,16 @@
-def credentials_email(full_name: str, login: str, password: str) -> tuple[str, str]:
+def credentials_email(
+    full_name: str, login: str, password: str, site_url: str = ""
+) -> tuple[str, str]:
     subject = "Доступ к кабинету ученика"
     body = (
         f"Здравствуйте, {full_name}!\n\n"
         f"Для вас создан личный кабинет.\n"
         f"Логин: {login}\n"
         f"Пароль: {password}\n\n"
-        f"Пароль можно сменить в кабинете после входа."
     )
+    if site_url:
+        body += f"Войти в кабинет: {site_url}\n\n"
+    body += "Пароль можно сменить в кабинете после входа."
     return subject, body
 
 

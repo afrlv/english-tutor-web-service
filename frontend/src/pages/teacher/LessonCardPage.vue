@@ -412,7 +412,12 @@ async function onAttach(setId: number) {
               @click="onRestore"
             />
             <Button label="Изменить" icon="pi pi-pencil" severity="secondary" @click="editOpen = true" />
-            <a v-if="lesson.zoom_link" :href="lesson.zoom_link" target="_blank">
+            <a
+              v-if="lesson.zoom_link || lesson.student_default_zoom_link"
+              :href="lesson.zoom_link || lesson.student_default_zoom_link || undefined"
+              target="_blank"
+              rel="noopener"
+            >
               <Button label="Zoom" icon="pi pi-video" severity="info" outlined />
             </a>
             <Button label="Удалить" icon="pi pi-trash" severity="danger" text @click="onDelete" />

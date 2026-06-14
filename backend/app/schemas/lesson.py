@@ -76,6 +76,7 @@ class LessonOut(BaseModel):
     price: Decimal | None = None
     topic: str | None
     zoom_link: str | None
+    student_default_zoom_link: str | None = None  # постоянная ссылка из профиля (fallback)
     recommendation: str | None
     status: LessonStatus
     conducted_at: datetime | None
