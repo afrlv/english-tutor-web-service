@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import Button from "primevue/button";
+import Dialog from "primevue/dialog";
+import { ref } from "vue";
 
 import { attachmentKind, videoEmbedUrl, type AttachmentLike } from "../utils/attachments";
 
@@ -9,6 +11,17 @@ const emit = defineEmits<{ remove: [id: number] }>();
 
 function href(a: AttachmentLike): string {
   return a.url ?? `/api/files/${a.file_path}`;
+}
+
+// Просмотр PDF в модалке
+const pdfOpen = ref(false);
+const pdfUrl = ref("");
+const pdfName = ref("");
+
+function openPdf(a: AttachmentLike) {
+  pdfUrl.value = href(a);
+  pdfName.value = a.name;
+  pdfOpen.value = true;
 }
 </script>
 
@@ -49,7 +62,15 @@ function href(a: AttachmentLike): string {
         </figure>
       </template>
 
-      <!-- Прочее (PDF, файлы, обычные ссылки): ссылка с иконкой -->
+      <!-- PDF: превью-плитка, клик — просмотр в модалке -->
+      <template v-else-if="attachmentKind(a) === 'pdf'">
+        <button type="button" class="pdf-tile" @click="openPdf(a)">
+          <i class="pi pi-file-pdf" />
+          <span class="pdf-name">{{ a.name }}</span>
+        </button>
+      </template>
+
+      <!-- Прочее (файлы, обычные ссылки): ссылка с иконкой -->
       <span v-else class="item">
         <i :class="a.url ? 'pi pi-link' : 'pi pi-paperclip'" />
         <a :href="href(a)" target="_blank" rel="noopener">{{ a.name }}</a>
@@ -68,6 +89,18 @@ function href(a: AttachmentLike): string {
       />
     </div>
   </div>
+
+  <Dialog
+    v-model:visible="pdfOpen"
+    :header="pdfName"
+    modal
+    maximizable
+    dismissable-mask
+    class="pdf-dialog"
+    :style="{ width: '80vw', height: '90vh' }"
+  >
+    <iframe :src="pdfUrl" class="pdf-frame" title="PDF" />
+  </Dialog>
 </template>
 
 <style scoped>
@@ -127,6 +160,46 @@ function href(a: AttachmentLike): string {
   background: var(--p-surface-100);
   border-radius: 6px;
   padding: 0.1rem 0.5rem;
+}
+.pdf-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 9rem;
+  height: 7rem;
+  padding: 0.75rem;
+  border: 1px solid var(--p-surface-200);
+  border-radius: 8px;
+  background: var(--p-surface-0);
+  cursor: pointer;
+  font: inherit;
+}
+.pdf-tile:hover {
+  border-color: var(--p-primary-color);
+}
+.pdf-tile .pi-file-pdf {
+  font-size: 2.2rem;
+  color: #d32f2f;
+}
+.pdf-name {
+  font-size: 0.8rem;
+  text-align: center;
+  word-break: break-word;
+  color: var(--p-text-color);
+  line-height: 1.2;
+  max-height: 2.4em;
+  overflow: hidden;
+}
+.pdf-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+:deep(.pdf-dialog .p-dialog-content) {
+  height: 100%;
+  padding: 0;
 }
 .remove {
   flex-shrink: 0;

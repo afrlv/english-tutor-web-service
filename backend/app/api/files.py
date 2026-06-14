@@ -90,4 +90,5 @@ async def get_file(
     full = Path(get_settings().media_dir) / path
     if not full.is_file():
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Файл не найден")
-    return FileResponse(full)
+    # inline — чтобы PDF/картинки показывались встроенно (превью, iframe), не скачивались
+    return FileResponse(full, content_disposition_type="inline")
