@@ -129,12 +129,16 @@ jobs:
     runs-on: [self-hosted]
     permissions:
       contents: read
+      packages: read
     steps:
-      # Образы в GHCR публичные — docker login на сервере не нужен (он же виснет
-      # на self-hosted из-за credential-helper). Тянем pull'ом без аутентификации.
       - name: Pull images and (re)start prod stack
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          # Логин в GHCR голым bash (не docker/login-action — JS-action виснет и
+          # жрёт память на слабом self-hosted). --password-stdin не требует TTY.
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           APP_DIR="$HOME/english-tutor-web-service"
           if [ ! -d "$APP_DIR/.git" ]; then
             git clone "https://github.com/${{ github.repository }}.git" "$APP_DIR"
