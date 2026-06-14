@@ -12,6 +12,8 @@ import { useConfirm } from "primevue/useconfirm";
 import { useToast } from "primevue/usetoast";
 import { onMounted, ref } from "vue";
 
+import { computed } from "vue";
+
 import {
   adminCreateUser,
   adminDeleteUser,
@@ -20,6 +22,8 @@ import {
   adminRestoreUser,
   adminSetPassword,
   adminUpdateUser,
+  assignTeacher,
+  listUnassignedStudents,
 } from "../../api";
 import type { User } from "../../api/types";
 import { useAuthStore } from "../../stores/auth";
@@ -39,6 +43,16 @@ const newPassword = ref("");
 const saving = ref(false);
 const editUser = ref<User | null>(null);
 const editForm = ref({ full_name: "", login: "", email: "" });
+
+// Привязка непривязанных учеников к учителю
+const unassignedIds = ref<Set<number>>(new Set());
+const assignUser = ref<User | null>(null);
+const assignTeacherId = ref<number | null>(null);
+const teachers = computed(() =>
+  users.value
+    .filter((u) => u.role === "teacher" && u.is_active)
+    .map((u) => ({ label: `${u.full_name} (${u.email})`, value: u.id })),
+);
 
 const roleOptions = [
   { label: "Суперюзер", value: "superuser" },
@@ -61,10 +75,31 @@ function showError(e: unknown, fallback: string) {
 async function load() {
   loading.value = true;
   try {
-    users.value = await adminListUsers();
+    const [list, unassigned] = await Promise.all([
+      adminListUsers(),
+      listUnassignedStudents(),
+    ]);
+    users.value = list;
+    unassignedIds.value = new Set(unassigned.map((u) => u.user_id));
     if (showDeleted.value) deletedUsers.value = await adminListDeletedUsers();
   } finally {
     loading.value = false;
+  }
+}
+
+async function doAssignTeacher() {
+  if (!assignUser.value || assignTeacherId.value === null) return;
+  saving.value = true;
+  try {
+    await assignTeacher(assignUser.value.id, assignTeacherId.value);
+    toast.add({ severity: "success", summary: "Ученик привязан к учителю", life: 3000 });
+    assignUser.value = null;
+    assignTeacherId.value = null;
+    await load();
+  } catch (e) {
+    showError(e, "Не удалось привязать ученика");
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -221,6 +256,16 @@ async function setPassword() {
           <Column header="">
             <template #body="{ data }">
               <Button
+                v-if="data.role === 'student' && unassignedIds.has(data.id)"
+                v-tooltip="'Ученик не привязан к учителю'"
+                label="Назначить учителя"
+                icon="pi pi-link"
+                severity="warn"
+                text
+                size="small"
+                @click="assignUser = data"
+              />
+              <Button
                 v-tooltip="'Изменить имя, логин, почту'"
                 icon="pi pi-pencil"
                 text
@@ -330,6 +375,33 @@ async function setPassword() {
           <InputText v-model="editForm.email" type="email" required fluid />
         </label>
         <Button type="submit" label="Сохранить" :loading="saving" />
+      </form>
+    </Dialog>
+
+    <Dialog
+      :visible="assignUser !== null"
+      :header="`Привязать к учителю: ${assignUser?.full_name ?? ''}`"
+      modal
+      @update:visible="assignUser = null"
+    >
+      <form class="form" @submit.prevent="doAssignTeacher">
+        <label>
+          Учитель
+          <Select
+            v-model="assignTeacherId"
+            :options="teachers"
+            option-label="label"
+            option-value="value"
+            placeholder="Выберите учителя"
+            fluid
+          />
+        </label>
+        <Button
+          type="submit"
+          label="Привязать"
+          :loading="saving"
+          :disabled="assignTeacherId === null"
+        />
       </form>
     </Dialog>
 

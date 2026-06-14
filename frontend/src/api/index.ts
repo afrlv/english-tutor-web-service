@@ -20,6 +20,7 @@ import type {
   Progress,
   ScheduleSlot,
   Student,
+  UnassignedStudent,
   StudyDirection,
   StudyToday,
   Transaction,
@@ -80,6 +81,12 @@ export const listEmailLog = () =>
 export const listStudents = () => api.get<Student[]>("/students").then((r) => r.data);
 export const createStudent = (data: { email: string; full_name: string }) =>
   api.post<Student>("/students", data).then((r) => r.data);
+export const listUnassignedStudents = () =>
+  api.get<UnassignedStudent[]>("/students-unassigned").then((r) => r.data);
+export const attachStudent = (user_id: number) =>
+  api.post<Student>("/students/attach", { user_id }).then((r) => r.data);
+export const assignTeacher = (userId: number, teacher_id: number) =>
+  api.post(`/admin/users/${userId}/assign-teacher`, { teacher_id });
 export const getStudent = (id: number) =>
   api.get<Student>(`/students/${id}`).then((r) => r.data);
 export const updateStudent = (

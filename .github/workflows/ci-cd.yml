@@ -122,31 +122,6 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-  deploy:
-    name: Deploy to server
-    needs: [build-backend, build-frontend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: [self-hosted]
-    permissions:
-      contents: read
-    steps:
-      # Образы в GHCR публичные — docker login на сервере не нужен (он же виснет
-      # на self-hosted из-за credential-helper). Тянем pull'ом без аутентификации.
-      - name: Pull images and (re)start prod stack
-        run: |
-          set -euo pipefail
-          APP_DIR="$HOME/english-tutor-web-service"
-          if [ ! -d "$APP_DIR/.git" ]; then
-            git clone "https://github.com/${{ github.repository }}.git" "$APP_DIR"
-          fi
-          cd "$APP_DIR"
-          git fetch --prune origin
-          git reset --hard origin/main
-          if [ ! -f .env ]; then
-            echo "::error::.env не найден в $APP_DIR — положите прод-окружение (см. .env.prod.example)"
-            exit 1
-          fi
-          # Образы уже собраны в CI — на сервере только тянем и поднимаем, без build
-          docker compose -f docker-compose.prod.yml --env-file .env pull
-          docker compose -f docker-compose.prod.yml --env-file .env up -d
-          docker image prune -f
+# Деплой — вручную (сервер 0.5 ГБ RAM, self-hosted раннер отключён, чтобы не
+# конкурировать за память с приложением). На сервере: docker compose pull && up -d
+# (образы тянутся из GHCR). Подробности — в README, раздел «Деплой».

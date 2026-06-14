@@ -10,6 +10,7 @@ from app.db import get_db
 from app.deps import get_current_user, require_roles
 from app.models import EmailLog, Role, Student, User
 from app.schemas.email import EmailLogOut, EmailSettingsIn, EmailSettingsOut
+from app.schemas.student import AssignTeacherIn
 from app.schemas.user import PasswordSet, UserCreate, UserOut, UserUpdate
 from app.security import hash_password
 from app.services.digest import send_daily_digest
@@ -162,6 +163,28 @@ async def restore_user(user_id: int, db: AsyncSession = Depends(get_db)):
     user.is_active = True
     await db.commit()
     return user
+
+
+@router.post(
+    "/users/{user_id}/assign-teacher", status_code=status.HTTP_201_CREATED
+)
+async def assign_teacher(
+    user_id: int, data: AssignTeacherIn, db: AsyncSession = Depends(get_db)
+):
+    """Назначает непривязанному ученику учителя (создаёт карточку Student)."""
+    target = await _get_user(user_id, db)
+    if target.role != Role.student:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Это не ученик")
+    if await db.scalar(select(Student.id).where(Student.user_id == target.id)):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Этот ученик уже привязан к учителю"
+        )
+    teacher = await db.get(User, data.teacher_id)
+    if teacher is None or teacher.role != Role.teacher or teacher.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Учитель не найден")
+    db.add(Student(user_id=target.id, teacher_id=teacher.id))
+    await db.commit()
+    return {"detail": "Ученик привязан к учителю"}
 
 
 @router.post("/digest/send-now")

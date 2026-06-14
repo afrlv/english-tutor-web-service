@@ -15,6 +15,7 @@ from app.models import (
 )
 from app.schemas.comment import CommentCreate, CommentOut
 from app.schemas.student import (
+    AttachStudentIn,
     ParentCreate,
     ParentOut,
     ParentUpdate,
@@ -22,6 +23,7 @@ from app.schemas.student import (
     StudentCreate,
     StudentTeacherOut,
     StudentUpdate,
+    UnassignedStudentOut,
 )
 from app.schemas.user import PasswordSet
 from app.security import hash_password
@@ -79,10 +81,88 @@ async def create_student(
             status.HTTP_400_BAD_REQUEST,
             "Создавать учеников может только учитель (войдите от имени учителя)",
         )
+    # Если почту уже занял непривязанный ученик — подсказать привязать, а не плодить дубль
+    existing = await db.scalar(select(User).where(User.email == data.email))
+    if existing is not None:
+        if (
+            existing.role == Role.student
+            and existing.deleted_at is None
+            and await db.scalar(
+                select(Student.id).where(Student.user_id == existing.id)
+            )
+            is None
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Такой ученик уже заведён, но не привязан. "
+                "Привяжите его через «Привязать существующего».",
+            )
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Пользователь с такой почтой уже существует"
+        )
     new_user = await create_user_with_credentials_email(
         db, email=data.email, full_name=data.full_name, role=Role.student
     )
     student = Student(user_id=new_user.id, teacher_id=user.id)
+    db.add(student)
+    await db.commit()
+    await db.refresh(student)
+    return student
+
+
+@router.get("/students-unassigned", response_model=list[UnassignedStudentOut])
+async def list_unassigned_students(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+):
+    """Пользователи-ученики без карточки Student (созданы админом, ничьи).
+
+    Пул общий: непривязанный ученик не принадлежит ни одному учителю, поэтому
+    виден всем учителям и суперюзеру; забрать к себе может любой учитель.
+    """
+    rows = (
+        await db.scalars(
+            select(User)
+            .outerjoin(Student, Student.user_id == User.id)
+            .where(
+                User.role == Role.student,
+                User.deleted_at.is_(None),
+                Student.id.is_(None),
+            )
+            .order_by(User.id)
+        )
+    ).all()
+    return [
+        UnassignedStudentOut(
+            user_id=u.id, email=u.email, full_name=u.full_name, created_at=u.created_at
+        )
+        for u in rows
+    ]
+
+
+@router.post(
+    "/students/attach",
+    response_model=StudentTeacherOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def attach_student(
+    data: AttachStudentIn,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Учитель привязывает к себе непривязанного ученика (создаёт карточку Student)."""
+    if user.role != Role.teacher:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Привязывать учеников может только учитель (войдите от имени учителя)",
+        )
+    target = await db.get(User, data.user_id)
+    if target is None or target.role != Role.student or target.deleted_at is not None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Ученик не найден")
+    if await db.scalar(select(Student.id).where(Student.user_id == target.id)):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Этот ученик уже привязан к учителю"
+        )
+    student = Student(user_id=target.id, teacher_id=user.id)
     db.add(student)
     await db.commit()
     await db.refresh(student)
