@@ -32,14 +32,21 @@ const progress = ref<Progress | null>(null);
 const newComment = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
 
+// Предстоящие: 3 ближайших (ближайший сверху)
 const upcoming = computed(
   () =>
     cabinet.value?.lessons
       .filter((l) => l.status === "planned")
-      .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)) ?? [],
+      .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
+      .slice(0, 3) ?? [],
 );
+// Прошедшие: 3 последних (свежий сверху)
 const past = computed(
-  () => cabinet.value?.lessons.filter((l) => l.status === "conducted") ?? [],
+  () =>
+    cabinet.value?.lessons
+      .filter((l) => l.status === "conducted")
+      .sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at))
+      .slice(0, 3) ?? [],
 );
 // Уроки с несделанными заданиями — быстрые ссылки в карточку урока
 const pendingHomework = computed(
