@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     tz: str = "Europe/Moscow"
     # Горизонт материализации уроков из повторяющихся слотов
     generate_weeks: int = 4
+    # Сколько карточек максимум в сборной сессии «Повторить сегодня»
+    study_daily_limit: int = 20
 
     media_dir: str = "media"
 

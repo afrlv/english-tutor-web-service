@@ -12,10 +12,12 @@ const emit = defineEmits<{ changed: [] }>();
 const cards = ref<Card[]>([...props.cardSet.cards]);
 const newFront = ref("");
 const newBack = ref("");
+const newExample = ref("");
 // id карточки в режиме правки
 const editingId = ref<number | null>(null);
 const editFront = ref("");
 const editBack = ref("");
+const editExample = ref("");
 
 async function refresh() {
   cards.value = (await getCardSet(props.cardSet.id)).cards;
@@ -24,9 +26,15 @@ async function refresh() {
 
 async function onAdd() {
   if (!newFront.value.trim() || !newBack.value.trim()) return;
-  await addCard(props.cardSet.id, newFront.value.trim(), newBack.value.trim());
+  await addCard(
+    props.cardSet.id,
+    newFront.value.trim(),
+    newBack.value.trim(),
+    newExample.value.trim() || null,
+  );
   newFront.value = "";
   newBack.value = "";
+  newExample.value = "";
   await refresh();
 }
 
@@ -34,11 +42,17 @@ function startEdit(card: Card) {
   editingId.value = card.id;
   editFront.value = card.front;
   editBack.value = card.back;
+  editExample.value = card.example ?? "";
 }
 
 async function saveEdit() {
   if (editingId.value === null) return;
-  await updateCard(editingId.value, editFront.value.trim(), editBack.value.trim());
+  await updateCard(
+    editingId.value,
+    editFront.value.trim(),
+    editBack.value.trim(),
+    editExample.value.trim() || null,
+  );
   editingId.value = null;
   await refresh();
 }
@@ -53,13 +67,15 @@ async function onDelete(id: number) {
   <div class="editor">
     <div v-for="card in cards" :key="card.id" class="card-row">
       <template v-if="editingId === card.id">
-        <InputText v-model="editFront" class="cell" @keyup.enter="saveEdit" />
-        <InputText v-model="editBack" class="cell" @keyup.enter="saveEdit" />
+        <InputText v-model="editFront" class="cell" placeholder="Слово (англ.)" @keyup.enter="saveEdit" />
+        <InputText v-model="editBack" class="cell" placeholder="Перевод" @keyup.enter="saveEdit" />
+        <InputText v-model="editExample" class="cell" placeholder="Пример (необязательно)" @keyup.enter="saveEdit" />
         <Button icon="pi pi-check" text rounded size="small" severity="success" @click="saveEdit" />
       </template>
       <template v-else>
         <span class="cell front">{{ card.front }}</span>
         <span class="cell">{{ card.back }}</span>
+        <span v-if="card.example" class="cell example">«{{ card.example }}»</span>
         <span class="stats" :title="`верно: ${card.times_correct}, ошибок: ${card.times_wrong}`">
           {{ card.times_correct }}✓ {{ card.times_wrong }}✗
         </span>
@@ -79,6 +95,7 @@ async function onDelete(id: number) {
     <form class="card-row add-row" @submit.prevent="onAdd">
       <InputText v-model="newFront" placeholder="Слово (англ.)" class="cell" />
       <InputText v-model="newBack" placeholder="Перевод" class="cell" />
+      <InputText v-model="newExample" placeholder="Пример (необязательно)" class="cell" />
       <Button
         type="submit"
         icon="pi pi-plus"
@@ -99,6 +116,7 @@ async function onDelete(id: number) {
 .card-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.5rem;
 }
 .cell {
@@ -107,6 +125,10 @@ async function onDelete(id: number) {
 }
 .front {
   font-weight: 600;
+}
+.example {
+  font-style: italic;
+  color: var(--p-text-muted-color);
 }
 .stats {
   font-size: 0.8rem;

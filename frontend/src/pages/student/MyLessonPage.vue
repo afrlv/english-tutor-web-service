@@ -85,6 +85,7 @@ async function onSaveAnswer(hwId: number) {
         <template #content>
           <div v-for="s in cardSets" :key="s.id" class="set-row">
             <span class="set-title">{{ s.title }}</span>
+            <Tag v-if="s.due_count" :value="`${s.due_count} к повтору`" severity="warn" />
             <span class="set-progress">{{ s.learned }} / {{ s.total }} выучено</span>
             <Button
               label="Учить"

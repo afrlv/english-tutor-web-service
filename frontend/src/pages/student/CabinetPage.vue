@@ -12,11 +12,12 @@ import { computed, onMounted, ref } from "vue";
 import {
   addMyComment,
   fetchCabinet,
+  getProgress,
   myCardSets,
   myComments,
   uploadAvatar,
 } from "../../api";
-import type { Cabinet, CardSetSummary, Comment } from "../../api/types";
+import type { Cabinet, CardSetSummary, Comment, Progress } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
 import { useAuthStore } from "../../stores/auth";
 import { formatDateTime } from "../../utils/format";
@@ -27,6 +28,7 @@ const auth = useAuthStore();
 const cabinet = ref<Cabinet | null>(null);
 const comments = ref<Comment[]>([]);
 const cardSets = ref<CardSetSummary[]>([]);
+const progress = ref<Progress | null>(null);
 const newComment = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
 
@@ -45,10 +47,11 @@ const pendingHomework = computed(
 );
 
 async function load() {
-  [cabinet.value, comments.value, cardSets.value] = await Promise.all([
+  [cabinet.value, comments.value, cardSets.value, progress.value] = await Promise.all([
     fetchCabinet(),
     myComments(),
     myCardSets(),
+    getProgress(),
   ]);
 }
 
@@ -170,11 +173,43 @@ async function onAddComment() {
         </template>
       </Card>
 
+      <Card v-if="progress && progress.words_total">
+        <template #title>Мой прогресс</template>
+        <template #content>
+          <div class="progress-grid">
+            <div class="stat">
+              <span class="stat-num">🔥 {{ progress.study_streak }}</span>
+              <span class="stat-label">дней подряд</span>
+            </div>
+            <div class="stat">
+              <span class="stat-num">{{ progress.words_learned }} / {{ progress.words_total }}</span>
+              <span class="stat-label">слов выучено</span>
+            </div>
+            <div class="stat">
+              <span class="stat-num">{{ progress.due_today }}</span>
+              <span class="stat-label">к повтору сегодня</span>
+            </div>
+          </div>
+          <Button
+            v-if="progress.due_today"
+            :label="`Повторить ${progress.due_today}`"
+            icon="pi pi-bolt"
+            class="review-btn"
+            @click="$router.push('/study/today')"
+          />
+        </template>
+      </Card>
+
       <Card v-if="cardSets.length">
         <template #title>Карточки для запоминания</template>
         <template #content>
           <div v-for="s in cardSets" :key="s.id" class="set-row">
             <span class="set-title">{{ s.title }}</span>
+            <Tag
+              v-if="s.due_count"
+              :value="`${s.due_count} к повтору`"
+              severity="warn"
+            />
             <span class="set-progress">{{ s.learned }} / {{ s.total }} выучено</span>
             <Button
               label="Учить"
@@ -246,6 +281,28 @@ async function onAddComment() {
 .hw-lesson {
   margin-bottom: 0.75rem;
 }
+.progress-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.stat-num {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+.stat-label {
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+}
+.review-btn {
+  margin-top: 0.25rem;
+}
 .set-row {
   display: flex;
   align-items: center;
@@ -255,6 +312,7 @@ async function onAddComment() {
 .set-title {
   font-weight: 600;
   min-width: 10rem;
+  flex: 1;
 }
 .set-progress {
   color: var(--p-text-muted-color);
