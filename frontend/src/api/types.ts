@@ -110,7 +110,10 @@ export interface Card {
   set_id: number;
   front: string;
   back: string;
+  example: string | null;
   position: number;
+  box: number;
+  due_at: string | null;
   times_correct: number;
   times_wrong: number;
 }
@@ -130,6 +133,28 @@ export interface CardSetSummary {
   title: string;
   total: number;
   learned: number;
+  due_count: number;
+}
+
+export type StudyDirection = "front_back" | "back_front" | "mixed";
+
+export interface GradeEntry {
+  grade: number;
+  at: string;
+}
+
+export interface Progress {
+  words_total: number;
+  words_learned: number;
+  due_today: number;
+  study_streak: number;
+  best_streak: number;
+  recent_grades: GradeEntry[];
+}
+
+export interface StudyToday {
+  total_due: number;
+  cards: Card[];
 }
 
 export interface ScheduleSlot {

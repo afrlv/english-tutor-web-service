@@ -49,6 +49,38 @@ cd frontend && npm run typecheck   # vue-tsc
 После добавления npm-зависимостей: `docker compose restart frontend`
 (у контейнера свой volume node_modules).
 
+## Деплой (CI/CD)
+
+GitHub Actions (`.github/workflows/ci-cd.yml`): на каждый push/PR гоняются
+backend-тесты (pytest + postgres) и frontend (typecheck, vitest, build). При
+push в `main`, если тесты зелёные, запускается деплой на сервер через
+**self-hosted runner**, установленный на самом сервере.
+
+Прод-стек — `docker-compose.prod.yml`: собранный фронт за nginx (отдаёт статику,
+проксирует `/api` на backend, SPA-fallback), backend без reload, postgres только
+внутри сети. Порт наружу — 80 (nginx).
+
+Разовая подготовка сервера (Docker уже установлен):
+
+```bash
+# 1. Положить прод-окружение по пути, который ждёт workflow
+cd ~ && git clone https://github.com/afrlv/english-tutor-web-service.git
+cd ~/english-tutor-web-service
+cp .env.prod.example .env && nano .env          # заполнить секреты, DEV_MODE=false
+
+# 2. Поставить self-hosted runner (токен — в репо: Settings → Actions → Runners → New)
+mkdir ~/actions-runner && cd ~/actions-runner
+curl -o r.tar.gz -L https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64.tar.gz
+tar xzf r.tar.gz
+./config.sh --url https://github.com/afrlv/english-tutor-web-service --token <RUNNER_TOKEN>
+sudo ./svc.sh install && sudo ./svc.sh start    # runner как systemd-сервис
+
+# 3. Пользователь runner'а должен иметь доступ к docker
+sudo usermod -aG docker $USER                   # перелогиниться/перезапустить сервис
+```
+
+Дальше каждый push в `main` после зелёного CI сам пересобирает и поднимает стек.
+
 ## Как устроены деньги
 
 Неизменяемый леджер `transactions`: отметка «урок проведён» создаёт начисление

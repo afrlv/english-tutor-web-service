@@ -17,8 +17,11 @@ import type {
   Lesson,
   LessonAttachment,
   Parent,
+  Progress,
   ScheduleSlot,
   Student,
+  StudyDirection,
+  StudyToday,
   Transaction,
   User,
 } from "./types";
@@ -190,7 +193,7 @@ export const listCardSets = (studentId: number) =>
 export const createCardSet = (
   studentId: number,
   title: string,
-  cards: { front: string; back: string }[],
+  cards: { front: string; back: string; example?: string | null }[],
 ) => api.post<CardSet>(`/students/${studentId}/card-sets`, { title, cards }).then((r) => r.data);
 // наборы конкретного урока
 export const listLessonCardSets = (lessonId: number) =>
@@ -204,10 +207,18 @@ export const getCardSet = (setId: number) =>
 export const renameCardSet = (setId: number, title: string) =>
   api.patch<CardSet>(`/card-sets/${setId}`, { title }).then((r) => r.data);
 export const deleteCardSet = (setId: number) => api.delete(`/card-sets/${setId}`);
-export const addCard = (setId: number, front: string, back: string) =>
-  api.post<Card>(`/card-sets/${setId}/cards`, { front, back }).then((r) => r.data);
-export const updateCard = (cardId: number, front: string, back: string) =>
-  api.patch<Card>(`/cards/${cardId}`, { front, back }).then((r) => r.data);
+export const addCard = (
+  setId: number,
+  front: string,
+  back: string,
+  example: string | null = null,
+) => api.post<Card>(`/card-sets/${setId}/cards`, { front, back, example }).then((r) => r.data);
+export const updateCard = (
+  cardId: number,
+  front: string,
+  back: string,
+  example: string | null = null,
+) => api.patch<Card>(`/cards/${cardId}`, { front, back, example }).then((r) => r.data);
 export const deleteCard = (cardId: number) => api.delete(`/cards/${cardId}`);
 // сторона ученика
 export const myCardSets = () =>
@@ -216,6 +227,14 @@ export const myCardSet = (setId: number) =>
   api.get<CardSet>(`/me/card-sets/${setId}`).then((r) => r.data);
 export const answerCard = (cardId: number, correct: boolean) =>
   api.post<Card>(`/me/cards/${cardId}/answer`, { correct }).then((r) => r.data);
+export const studySet = (setId: number, direction: StudyDirection) =>
+  api
+    .get<Card[]>(`/me/card-sets/${setId}/study`, { params: { direction } })
+    .then((r) => r.data);
+export const studyToday = () =>
+  api.get<StudyToday>("/me/study/today").then((r) => r.data);
+export const getProgress = () =>
+  api.get<Progress>("/me/progress").then((r) => r.data);
 
 // --- comments ---
 export const listComments = (studentId: number) =>

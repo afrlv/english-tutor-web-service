@@ -1,4 +1,6 @@
-from sqlalchemy import ForeignKey, Integer, String
+from datetime import datetime, timedelta
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin
@@ -37,13 +39,38 @@ class Card(Base, CreatedAtMixin):
     )
     front: Mapped[str] = mapped_column(String(500))  # слово/фраза
     back: Mapped[str] = mapped_column(String(500))  # перевод
+    example: Mapped[str | None] = mapped_column(String(500))  # пример употребления
     position: Mapped[int] = mapped_column(Integer, default=0)
-    # Счётчики ответов ученика; карточка «выучена» при times_correct >= LEARNED_THRESHOLD
+    # Интервальное повторение (Лейтнер): коробка 0 = новая/в изучении, выше = реже.
+    box: Mapped[int] = mapped_column(Integer, default=0)
+    # Когда карточка снова к повтору; NULL = новая, показываем сразу.
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Накопительная статистика ответов (для учителя); SRS-логику ведёт box/due_at.
     times_correct: Mapped[int] = mapped_column(Integer, default=0)
     times_wrong: Mapped[int] = mapped_column(Integer, default=0)
 
     card_set: Mapped[CardSet] = relationship(back_populates="cards")
 
 
-# Сколько правильных ответов делает карточку «выученной»
-LEARNED_THRESHOLD = 2
+# Интервалы повтора (в днях) для коробок 1..MAX_BOX. Ответ верно поднимает на коробку
+# выше и откладывает повтор на следующий интервал; ошибка опускает на коробку ниже.
+BOX_INTERVALS = [1, 2, 4, 8, 16, 32]
+MAX_BOX = len(BOX_INTERVALS)  # = 6
+# Карточка «выучена», когда пережила интервал коробки 4 (~неделя) и выше.
+LEARNED_BOX = 4
+
+
+def apply_answer(card: Card, correct: bool, now: datetime) -> None:
+    """Обновляет состояние карточки по ответу ученика (Лейтнер)."""
+    if correct:
+        card.box = min(card.box + 1, MAX_BOX)
+        card.times_correct += 1
+        card.due_at = now + timedelta(days=BOX_INTERVALS[card.box - 1])
+    else:
+        card.box = max(card.box - 1, 0)
+        card.times_wrong += 1
+        card.due_at = now  # вернуть в оборот сегодня же
+
+
+def is_due(card: Card, now: datetime) -> bool:
+    return card.due_at is None or card.due_at <= now
