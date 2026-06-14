@@ -181,6 +181,63 @@ async def create_lesson_set(
     return card_set
 
 
+@router.post(
+    "/lessons/{lesson_id}/card-sets/{set_id}/attach",
+    response_model=CardSetOut,
+    dependencies=[teacher_only],
+)
+async def attach_set_to_lesson(
+    set_id: int,
+    lesson: Lesson = Depends(get_lesson_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    """Привязывает отвязанный набор ученика к уроку (повторная привязка)."""
+    card_set = await db.get(CardSet, set_id)
+    if card_set is None or card_set.student_id != lesson.student_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Набор не найден")
+    if card_set.lesson_id is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Набор уже привязан к уроку"
+        )
+    card_set.lesson_id = lesson.id
+    await db.commit()
+    await db.refresh(card_set)
+    return card_set
+
+
+@router.post(
+    "/card-sets/{set_id}/copy",
+    response_model=CardSetOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[teacher_only],
+)
+async def copy_set(
+    card_set: CardSet = Depends(get_set_or_404),
+    db: AsyncSession = Depends(get_db),
+):
+    """Копия набора тому же ученику: карточки без SRS-прогресса, набор отвязан."""
+    copy = CardSet(
+        student_id=card_set.student_id,
+        lesson_id=None,  # копия общая — потом можно привязать к нужному уроку
+        title=f"{card_set.title} (копия)",
+    )
+    db.add(copy)
+    await db.flush()
+    for i, card in enumerate(card_set.cards):
+        db.add(
+            Card(
+                set_id=copy.id,
+                front=card.front,
+                back=card.back,
+                example=card.example,
+                position=i,
+            )
+        )
+    await db.commit()
+    await db.refresh(copy)
+    return copy
+
+
 @router.get("/card-sets/{set_id}", response_model=CardSetOut, dependencies=[teacher_only])
 async def get_set(card_set: CardSet = Depends(get_set_or_404)):
     return card_set

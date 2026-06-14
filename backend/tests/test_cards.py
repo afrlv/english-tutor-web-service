@@ -16,6 +16,52 @@ async def create_set(client, sid: int) -> dict:
     return resp.json()
 
 
+async def test_copy_set(client, seed_users):
+    """Копия набора: те же карточки, отвязана, прогресс с нуля."""
+    sid = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    s = await create_set(client, sid)
+    # «Выучим» карточку в оригинале — копия не должна унаследовать прогресс
+    await login(client, "student@test.ru")
+    await client.post(f"/api/me/cards/{s['cards'][0]['id']}/answer", json={"correct": True})
+
+    await login(client, "teacher@test.ru")
+    resp = await client.post(f"/api/card-sets/{s['id']}/copy")
+    assert resp.status_code == 201, resp.text
+    copy = resp.json()
+    assert copy["id"] != s["id"]
+    assert copy["title"] == "Unit 3: Food (копия)"
+    assert copy["lesson_id"] is None
+    assert [(c["front"], c["back"]) for c in copy["cards"]] == [
+        ("apple", "яблоко"),
+        ("bread", "хлеб"),
+    ]
+    assert all(c["box"] == 0 and c["times_correct"] == 0 for c in copy["cards"])
+
+
+async def test_attach_unlinked_set_to_lesson(client, seed_users):
+    sid = seed_users["student_id"]
+    await login(client, "teacher@test.ru")
+    from tests.test_lessons import create_lesson
+
+    lesson = await create_lesson(client, sid)
+    s = await create_set(client, sid)  # общий набор (lesson_id=null)
+    assert s["lesson_id"] is None
+
+    # Привязка к уроку
+    resp = await client.post(f"/api/lessons/{lesson['id']}/card-sets/{s['id']}/attach")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["lesson_id"] == lesson["id"]
+
+    # Набор виден в списке урока
+    lesson_sets = (await client.get(f"/api/lessons/{lesson['id']}/card-sets")).json()
+    assert any(x["id"] == s["id"] for x in lesson_sets)
+
+    # Повторная привязка уже привязанного — 409
+    resp = await client.post(f"/api/lessons/{lesson['id']}/card-sets/{s['id']}/attach")
+    assert resp.status_code == 409
+
+
 async def test_teacher_creates_set_with_cards(client, seed_users):
     sid = seed_users["student_id"]
     await login(client, "teacher@test.ru")
