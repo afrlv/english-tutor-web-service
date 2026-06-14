@@ -45,8 +45,8 @@ describe("attachmentKind", () => {
     expect(attachmentKind(att({ file_path: "homework/x.mp3" }))).toBe("audio");
     expect(attachmentKind(att({ file_path: "homework/x.ogg" }))).toBe("audio");
   });
-  it("pdf и прочее — file", () => {
-    expect(attachmentKind(att({ file_path: "lesson/doc.pdf" }))).toBe("file");
+  it("pdf — отдельный тип", () => {
+    expect(attachmentKind(att({ file_path: "lesson/doc.pdf" }))).toBe("pdf");
   });
   it("видео-ссылка — video", () => {
     expect(attachmentKind(att({ url: "https://youtu.be/dQw4w9WgXcQ" }))).toBe("video");

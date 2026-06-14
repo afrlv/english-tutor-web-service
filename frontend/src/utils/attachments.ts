@@ -1,6 +1,6 @@
 // Определение типа вложения для отображения (превью/плеер) и встраивание видео.
 
-export type AttachmentKind = "image" | "audio" | "video" | "file";
+export type AttachmentKind = "image" | "audio" | "video" | "pdf" | "file";
 
 export interface AttachmentLike {
   id: number;
@@ -36,6 +36,7 @@ export function attachmentKind(a: AttachmentLike): AttachmentKind {
     const e = ext(a.file_path) || ext(a.name);
     if (IMAGE_EXT.includes(e)) return "image";
     if (AUDIO_EXT.includes(e)) return "audio";
+    if (e === "pdf") return "pdf";
     return "file";
   }
   if (a.url && videoEmbedUrl(a.url)) return "video";
