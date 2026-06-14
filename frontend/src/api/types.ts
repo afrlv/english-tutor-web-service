@@ -22,6 +22,13 @@ export interface Student {
   birthday?: string | null;
 }
 
+export interface UnassignedStudent {
+  user_id: number;
+  email: string;
+  full_name: string;
+  created_at: string;
+}
+
 export interface Parent {
   id: number;
   student_id: number;

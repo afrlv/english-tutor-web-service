@@ -54,36 +54,30 @@ cd frontend && npm run typecheck   # vue-tsc
 GitHub Actions (`.github/workflows/ci-cd.yml`): на каждый push/PR гоняются
 backend-тесты (pytest + postgres) и frontend (typecheck, vitest, build). При
 push в `main`, если тесты зелёные, образы backend и frontend **собираются в CI
-и пушатся в GHCR** (`ghcr.io/<owner>/<repo>-backend|-frontend`), затем
-**self-hosted runner** на сервере только тянет их и поднимает стек — без сборки
-на VPS (иначе слабый сервер падает по OOM при `npm build`/`uv sync`).
+и пушатся в GHCR** (`ghcr.io/<owner>/<repo>-backend|-frontend`) — сборка на
+GitHub-раннерах, чтобы не падать по OOM на слабом VPS при `npm build`/`uv sync`.
+
+**Деплой — вручную** (сервер 0.5 ГБ RAM: self-hosted раннер отключён, чтобы не
+конкурировать за память с приложением — на таком объёме раннер + стек не живут
+вместе). После зелёного CI обновить сервер по SSH:
+
+```bash
+ssh afrlv@<server>
+cd ~/english-tutor-web-service
+git pull                                              # свежий compose/конфиг
+docker compose -f docker-compose.prod.yml --env-file .env pull   # образы из GHCR
+docker compose -f docker-compose.prod.yml --env-file .env up -d
+```
 
 Прод-стек — `docker-compose.prod.yml`: собранный фронт за nginx (отдаёт статику,
 проксирует `/api` на backend, SPA-fallback), backend без reload, postgres только
-внутри сети. Порт наружу — 80 (nginx). Образы тянутся из GHCR
-(`docker compose pull && up -d`), приватные пакеты требуют `docker login ghcr.io`
-— на раннере логин делает сам workflow.
+внутри сети. Порт наружу — 80 (nginx). Образы в GHCR публичные — `pull` идёт без
+логина; если закрыть в private, перед pull нужен `docker login ghcr.io`.
 
-Разовая подготовка сервера (Docker уже установлен):
-
-```bash
-# 1. Положить прод-окружение по пути, который ждёт workflow
-cd ~ && git clone https://github.com/afrlv/english-tutor-web-service.git
-cd ~/english-tutor-web-service
-cp .env.prod.example .env && nano .env          # заполнить секреты, DEV_MODE=false
-
-# 2. Поставить self-hosted runner (токен — в репо: Settings → Actions → Runners → New)
-mkdir ~/actions-runner && cd ~/actions-runner
-curl -o r.tar.gz -L https://github.com/actions/runner/releases/latest/download/actions-runner-linux-x64.tar.gz
-tar xzf r.tar.gz
-./config.sh --url https://github.com/afrlv/english-tutor-web-service --token <RUNNER_TOKEN>
-sudo ./svc.sh install && sudo ./svc.sh start    # runner как systemd-сервис
-
-# 3. Пользователь runner'а должен иметь доступ к docker
-sudo usermod -aG docker $USER                   # перелогиниться/перезапустить сервис
-```
-
-Дальше каждый push в `main` после зелёного CI сам пересобирает и поднимает стек.
+Разовая подготовка сервера (Docker установлен): клон репозитория в
+`~/english-tutor-web-service`, `cp .env.prod.example .env` и заполнить секреты
+(`DEV_MODE=false`, длинный `JWT_SECRET`). Для слабого VPS — добавить swap (стек
+на 0.5 ГБ живёт за счёт подкачки).
 
 ## Как устроены деньги
 

@@ -33,6 +33,25 @@ class StudentTeacherOut(StudentOut):
     birthday: date | None = None
 
 
+class AttachStudentIn(BaseModel):
+    user_id: int
+
+
+class AssignTeacherIn(BaseModel):
+    teacher_id: int
+
+
+class UnassignedStudentOut(BaseModel):
+    """Пользователь-ученик без карточки Student (создан админом, не привязан к учителю)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: int
+    email: str
+    full_name: str
+    created_at: datetime
+
+
 class PrivateNoteIn(BaseModel):
     teacher_private_note: str | None
 

@@ -9,8 +9,13 @@ import { useToast } from "primevue/usetoast";
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
-import { createStudent, listStudents } from "../../api";
-import type { Student } from "../../api/types";
+import {
+  attachStudent,
+  createStudent,
+  listStudents,
+  listUnassignedStudents,
+} from "../../api";
+import type { Student, UnassignedStudent } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
 import { formatDate } from "../../utils/format";
 
@@ -22,6 +27,12 @@ const loading = ref(true);
 const dialogOpen = ref(false);
 const saving = ref(false);
 const form = ref({ email: "", full_name: "" });
+
+// Привязка существующего (непривязанного) ученика
+const attachOpen = ref(false);
+const unassigned = ref<UnassignedStudent[]>([]);
+const unassignedLoading = ref(false);
+const attachingId = ref<number | null>(null);
 
 async function load() {
   loading.value = true;
@@ -55,6 +66,39 @@ async function save() {
   }
 }
 
+async function openAttach() {
+  attachOpen.value = true;
+  unassignedLoading.value = true;
+  try {
+    unassigned.value = await listUnassignedStudents();
+  } finally {
+    unassignedLoading.value = false;
+  }
+}
+
+async function onAttach(u: UnassignedStudent) {
+  attachingId.value = u.user_id;
+  try {
+    await attachStudent(u.user_id);
+    toast.add({
+      severity: "success",
+      summary: "Ученик привязан",
+      detail: u.full_name,
+      life: 3000,
+    });
+    unassigned.value = unassigned.value.filter((x) => x.user_id !== u.user_id);
+    await load();
+    if (!unassigned.value.length) attachOpen.value = false;
+  } catch (e: unknown) {
+    const detail =
+      (e as { response?: { data?: { detail?: string } } }).response?.data?.detail ??
+      "Не удалось привязать";
+    toast.add({ severity: "error", summary: "Ошибка", detail, life: 4000 });
+  } finally {
+    attachingId.value = null;
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -64,7 +108,16 @@ onMounted(load);
       <template #title>
         <div class="header">
           Ученики
-          <Button label="Добавить ученика" icon="pi pi-plus" @click="dialogOpen = true" />
+          <div class="actions">
+            <Button
+              label="Привязать существующего"
+              icon="pi pi-link"
+              severity="secondary"
+              outlined
+              @click="openAttach"
+            />
+            <Button label="Добавить ученика" icon="pi pi-plus" @click="dialogOpen = true" />
+          </div>
         </div>
       </template>
       <template #content>
@@ -97,6 +150,30 @@ onMounted(load);
         <Button type="submit" label="Создать" :loading="saving" />
       </form>
     </Dialog>
+
+    <Dialog
+      v-model:visible="attachOpen"
+      header="Привязать существующего ученика"
+      modal
+      class="dialog"
+    >
+      <DataTable :value="unassigned" :loading="unassignedLoading" class="attach-table">
+        <template #empty>Непривязанных учеников нет</template>
+        <Column field="full_name" header="Имя" />
+        <Column field="email" header="Почта" />
+        <Column header="">
+          <template #body="{ data }">
+            <Button
+              label="Привязать к себе"
+              icon="pi pi-link"
+              size="small"
+              :loading="attachingId === data.user_id"
+              @click="onAttach(data)"
+            />
+          </template>
+        </Column>
+      </DataTable>
+    </Dialog>
   </AppLayout>
 </template>
 
@@ -105,6 +182,16 @@ onMounted(load);
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.attach-table {
+  min-width: 32rem;
 }
 .form {
   display: flex;
