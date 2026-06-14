@@ -1,5 +1,5 @@
-# Продакшн-стек: собранный фронт за nginx, backend без reload, postgres только внутри сети.
-# Запуск на сервере: docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+# Продакшн-стек: образы собираются в CI и тянутся из GHCR (на сервере без сборки).
+# Запуск на сервере: docker compose -f docker-compose.prod.yml --env-file .env pull && up -d
 services:
   postgres:
     image: postgres:16-alpine
@@ -17,7 +17,7 @@ services:
     restart: unless-stopped
 
   backend:
-    build: ./backend
+    image: ghcr.io/afrlv/english-tutor-web-service-backend:latest
     # Миграции + сид + сервер без reload и без bind-mount исходников
     command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     env_file: .env
@@ -29,7 +29,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: ./frontend
+    image: ghcr.io/afrlv/english-tutor-web-service-frontend:latest
     depends_on:
       - backend
     ports:

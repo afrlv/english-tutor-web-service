@@ -5,10 +5,14 @@ on:
     branches: [main]
   pull_request:
 
-# Параллельные пуши в main не наступают друг другу на пятки при деплое
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  # Имена образов в GitHub Container Registry (ghcr.io). repository = owner/name (lowercase)
+  BACKEND_IMAGE: ghcr.io/${{ github.repository }}-backend
+  FRONTEND_IMAGE: ghcr.io/${{ github.repository }}-frontend
 
 jobs:
   backend:
@@ -65,13 +69,75 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  # Сборка образов в CI (где памяти вдоволь) и пуш в GHCR — только на push в main
+  build-backend:
+    name: Build & push backend image
+    needs: backend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+  build-frontend:
+    name: Build & push frontend image
+    needs: frontend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
   deploy:
     name: Deploy to server
-    needs: [backend, frontend]
+    needs: [build-backend, build-frontend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: [self-hosted]
+    permissions:
+      contents: read
+      packages: read
     steps:
-      - name: Pull latest and (re)build prod stack
+      - name: Login to GHCR (для приватных образов)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull images and (re)start prod stack
         run: |
           set -euo pipefail
           APP_DIR="$HOME/english-tutor-web-service"
@@ -85,5 +151,7 @@ jobs:
             echo "::error::.env не найден в $APP_DIR — положите прод-окружение (см. .env.prod.example)"
             exit 1
           fi
-          docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+          # Образы уже собраны в CI — на сервере только тянем и поднимаем, без build
+          docker compose -f docker-compose.prod.yml --env-file .env pull
+          docker compose -f docker-compose.prod.yml --env-file .env up -d
           docker image prune -f

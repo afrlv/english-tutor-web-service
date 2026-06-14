@@ -53,12 +53,16 @@ cd frontend && npm run typecheck   # vue-tsc
 
 GitHub Actions (`.github/workflows/ci-cd.yml`): на каждый push/PR гоняются
 backend-тесты (pytest + postgres) и frontend (typecheck, vitest, build). При
-push в `main`, если тесты зелёные, запускается деплой на сервер через
-**self-hosted runner**, установленный на самом сервере.
+push в `main`, если тесты зелёные, образы backend и frontend **собираются в CI
+и пушатся в GHCR** (`ghcr.io/<owner>/<repo>-backend|-frontend`), затем
+**self-hosted runner** на сервере только тянет их и поднимает стек — без сборки
+на VPS (иначе слабый сервер падает по OOM при `npm build`/`uv sync`).
 
 Прод-стек — `docker-compose.prod.yml`: собранный фронт за nginx (отдаёт статику,
 проксирует `/api` на backend, SPA-fallback), backend без reload, postgres только
-внутри сети. Порт наружу — 80 (nginx).
+внутри сети. Порт наружу — 80 (nginx). Образы тянутся из GHCR
+(`docker compose pull && up -d`), приватные пакеты требуют `docker login ghcr.io`
+— на раннере логин делает сам workflow.
 
 Разовая подготовка сервера (Docker уже установлен):
 
