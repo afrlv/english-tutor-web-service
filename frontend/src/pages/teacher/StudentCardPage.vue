@@ -29,6 +29,7 @@ import {
   createLesson,
   createParent,
   createScheduleSlot,
+  copyCardSet,
   deleteCardSet,
   getCardSet,
   deleteScheduleSlot,
@@ -255,6 +256,16 @@ function onDeleteSet(s: CardSetSummary) {
       }
     },
   });
+}
+
+async function onCopySet(setId: number) {
+  try {
+    await copyCardSet(setId);
+    cardSets.value = await listCardSets(studentId);
+    toast.add({ severity: "success", summary: "Набор скопирован", life: 3000 });
+  } catch (e) {
+    showError(e, "Не удалось скопировать набор");
+  }
 }
 
 // --- профиль ---
@@ -688,6 +699,14 @@ async function onSetPassword() {
                   text
                   size="small"
                   @click="onOpenSet(s.id)"
+                />
+                <Button
+                  v-tooltip="'Создать копию набора'"
+                  icon="pi pi-copy"
+                  text
+                  rounded
+                  size="small"
+                  @click="onCopySet(s.id)"
                 />
                 <Button
                   icon="pi pi-trash"

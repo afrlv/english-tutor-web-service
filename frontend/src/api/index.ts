@@ -214,6 +214,10 @@ export const getCardSet = (setId: number) =>
 export const renameCardSet = (setId: number, title: string) =>
   api.patch<CardSet>(`/card-sets/${setId}`, { title }).then((r) => r.data);
 export const deleteCardSet = (setId: number) => api.delete(`/card-sets/${setId}`);
+export const copyCardSet = (setId: number) =>
+  api.post<CardSet>(`/card-sets/${setId}/copy`).then((r) => r.data);
+export const attachCardSetToLesson = (lessonId: number, setId: number) =>
+  api.post<CardSet>(`/lessons/${lessonId}/card-sets/${setId}/attach`).then((r) => r.data);
 export const addCard = (
   setId: number,
   front: string,

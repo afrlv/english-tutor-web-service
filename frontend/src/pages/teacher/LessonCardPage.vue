@@ -17,8 +17,10 @@ import {
   addHomework,
   addHomeworkLink,
   addLessonLink,
+  attachCardSetToLesson,
   cancelLesson,
   conductLesson,
+  copyCardSet,
   createLessonCardSet,
   deleteAttachment,
   deleteCardSet,
@@ -28,6 +30,7 @@ import {
   getCardSet,
   getLessonDetail,
   type LessonInput,
+  listCardSets,
   listLessonCardSets,
   restoreLesson,
   revertLesson,
@@ -73,6 +76,9 @@ const hwLinkName = ref("");
 const cardSets = ref<CardSetSummary[]>([]);
 const newSetTitle = ref("");
 const openSet = ref<CardSet | null>(null);
+// привязка существующего (отвязанного) набора
+const attachOpen = ref(false);
+const unlinkedSets = ref<CardSetSummary[]>([]);
 
 const gradeOptions = [2, 3, 4, 5].map((g) => ({ label: String(g), value: g }));
 
@@ -286,6 +292,40 @@ async function onDeleteSet(setId: number) {
   await deleteCardSet(setId);
   cardSets.value = await listLessonCardSets(lessonId.value);
 }
+
+async function onCopySet(setId: number) {
+  try {
+    await copyCardSet(setId);
+    toast.add({
+      severity: "success",
+      summary: "Набор скопирован",
+      detail: "Копия доступна в общих наборах ученика — можно привязать к уроку",
+      life: 4000,
+    });
+  } catch (e) {
+    showError(e, "Не удалось скопировать набор");
+  }
+}
+
+// Открыть диалог привязки: отвязанные наборы ученика (lesson_id = null)
+async function openAttach() {
+  if (!lesson.value) return;
+  const all = await listCardSets(lesson.value.student_id);
+  unlinkedSets.value = all.filter((s) => s.lesson_id === null);
+  attachOpen.value = true;
+}
+
+async function onAttach(setId: number) {
+  try {
+    await attachCardSetToLesson(lessonId.value, setId);
+    cardSets.value = await listLessonCardSets(lessonId.value);
+    unlinkedSets.value = unlinkedSets.value.filter((s) => s.id !== setId);
+    toast.add({ severity: "success", summary: "Набор привязан к уроку", life: 3000 });
+    if (!unlinkedSets.value.length) attachOpen.value = false;
+  } catch (e) {
+    showError(e, "Не удалось привязать набор");
+  }
+}
 </script>
 
 <template>
@@ -484,6 +524,14 @@ async function onDeleteSet(setId: number) {
             />
             <Button label="Открыть" icon="pi pi-pencil" text size="small" @click="onOpenSet(s.id)" />
             <Button
+              v-tooltip="'Создать копию набора'"
+              icon="pi pi-copy"
+              text
+              rounded
+              size="small"
+              @click="onCopySet(s.id)"
+            />
+            <Button
               icon="pi pi-trash"
               text
               rounded
@@ -496,16 +544,41 @@ async function onDeleteSet(setId: number) {
             Наборов для этого урока нет. Создайте набор слов — ученик увидит его
             на карточке урока и в своём кабинете.
           </p>
-          <form class="set-add" @submit.prevent="onCreateSet">
-            <InputText v-model="newSetTitle" placeholder="Название набора (напр. Слова Unit 3)" fluid />
-            <Button type="submit" label="Создать набор" icon="pi pi-plus" :disabled="!newSetTitle.trim()" />
-          </form>
+          <div class="set-actions">
+            <form class="set-add" @submit.prevent="onCreateSet">
+              <InputText v-model="newSetTitle" placeholder="Название набора (напр. Слова Unit 3)" fluid />
+              <Button type="submit" label="Создать набор" icon="pi pi-plus" :disabled="!newSetTitle.trim()" />
+            </form>
+            <Button
+              label="Привязать существующий"
+              icon="pi pi-link"
+              severity="secondary"
+              outlined
+              @click="openAttach"
+            />
+          </div>
         </template>
       </Card>
     </template>
 
     <LessonDialog v-model:visible="editOpen" :lesson="lesson" @save="saveEdit" />
     <CancelLessonDialog v-model:visible="cancelOpen" @confirm="onCancelConfirm" />
+
+    <Dialog
+      v-model:visible="attachOpen"
+      header="Привязать существующий набор"
+      modal
+      class="attach-dialog"
+    >
+      <div v-if="!unlinkedSets.length" class="muted">
+        Нет отвязанных наборов. Скопируйте набор или создайте новый — он появится здесь.
+      </div>
+      <div v-for="s in unlinkedSets" :key="s.id" class="set-row">
+        <span class="set-title">{{ s.title }}</span>
+        <span class="muted">{{ s.total }} карт.</span>
+        <Button label="Привязать" icon="pi pi-link" size="small" @click="onAttach(s.id)" />
+      </div>
+    </Dialog>
 
     <Dialog
       :visible="openSet !== null"
@@ -634,8 +707,15 @@ async function onDeleteSet(setId: number) {
 .set-add {
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.75rem;
+  flex: 1;
   max-width: 32rem;
+}
+.set-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 0.75rem;
 }
 :deep(.p-card) {
   margin-bottom: 1rem;
