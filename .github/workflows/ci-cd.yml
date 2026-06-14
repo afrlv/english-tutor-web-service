@@ -129,14 +129,9 @@ jobs:
     runs-on: [self-hosted]
     permissions:
       contents: read
-      packages: read
     steps:
-      - name: Login to GHCR (для приватных образов)
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      # Образы в GHCR публичные — docker login на сервере не нужен (он же виснет
+      # на self-hosted из-за credential-helper). Тянем pull'ом без аутентификации.
       - name: Pull images and (re)start prod stack
         run: |
           set -euo pipefail
