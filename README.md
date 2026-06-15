@@ -71,8 +71,29 @@ docker compose -f docker-compose.prod.yml --env-file .env up -d
 
 Прод-стек — `docker-compose.prod.yml`: собранный фронт за nginx (отдаёт статику,
 проксирует `/api` на backend, SPA-fallback), backend без reload, postgres только
-внутри сети. Порт наружу — 80 (nginx). Образы в GHCR публичные — `pull` идёт без
-логина; если закрыть в private, перед pull нужен `docker login ghcr.io`.
+внутри сети. Порты наружу — 80 и 443 (nginx). Образы в GHCR публичные — `pull`
+идёт без логина; если закрыть в private, перед pull нужен `docker login ghcr.io`.
+
+### HTTPS (домен + Let's Encrypt)
+
+Домен `repetitor-diary.ru` (A-записи `@`, `www`, `*` → IP сервера). TLS
+терминирует nginx-фронт, серт выпускает/продлевает контейнер `certbot` (webroot
+`/.well-known/acme-challenge/`, тома `certbot-conf` + `certbot-webroot`). nginx
+раз в 6 ч делает `reload`, чтобы подхватить продлённый серт; certbot раз в 12 ч —
+`renew`.
+
+**Первичный выпуск серта — один раз на сервере** (DNS уже указывает на хост):
+
+```bash
+cd ~/english-tutor-web-service
+./init-letsencrypt.sh   # ставит заглушку, поднимает nginx, выпускает реальный серт, reload
+```
+
+Скрипт решает «курицу-яйцо» (nginx с ssl-конфигом не стартует без серта, серт не
+выпустить без nginx): сначала временный самоподписанный серт, затем настоящий.
+Для отладки лимитов LE — выставить `staging=1` в скрипте. После выпуска в `.env`:
+`SITE_URL=https://repetitor-diary.ru`, `SECURE_COOKIES=true`. Порты 80 и 443
+должны быть открыты в фаерволе сервера.
 
 Разовая подготовка сервера (Docker установлен): клон репозитория в
 `~/english-tutor-web-service`, `cp .env.prod.example .env` и заполнить секреты
