@@ -23,7 +23,8 @@ certbot_run() {
 }
 
 echo "### Скачиваем рекомендованные TLS-параметры ..."
-certbot_run "sh -c 'curl -s https://raw.githubusercontent.com/certbot/certbot/main/certbot-nginx/src/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf > $certbot_path/options-ssl-nginx.conf && curl -s https://raw.githubusercontent.com/certbot/certbot/main/certbot/ssl-dhparams.pem > $certbot_path/ssl-dhparams.pem'"
+# В образе certbot/certbot нет curl — тянем busybox-wget'ом.
+certbot_run "sh -c 'wget -qO $certbot_path/options-ssl-nginx.conf https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf && wget -qO $certbot_path/ssl-dhparams.pem https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem'"
 
 echo "### Временный самоподписанный серт для ${domains[0]} ..."
 certbot_run "sh -c 'mkdir -p $live && openssl req -x509 -nodes -newkey rsa:2048 -days 1 -keyout $live/privkey.pem -out $live/fullchain.pem -subj \"/CN=localhost\"'"

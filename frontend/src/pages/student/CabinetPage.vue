@@ -32,19 +32,28 @@ const progress = ref<Progress | null>(null);
 const newComment = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
 
-// Предстоящие: 3 ближайших (ближайший сверху)
+// Урок «прошёл», когда его время уже наступило (scheduled_at — с таймзоной).
+const isPast = (scheduledAt: string) => new Date(scheduledAt).getTime() < Date.now();
+
+// Предстоящие: запланированные ещё впереди по времени, 3 ближайших (ближайший сверху).
+// Запланированный урок, чьё время прошло, сюда не попадает, даже если учитель
+// ещё не отметил его проведённым.
 const upcoming = computed(
   () =>
     cabinet.value?.lessons
-      .filter((l) => l.status === "planned")
+      .filter((l) => l.status === "planned" && !isPast(l.scheduled_at))
       .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
       .slice(0, 3) ?? [],
 );
-// Прошедшие: 3 последних (свежий сверху)
+// Прошедшие: проведённые + запланированные с прошедшим временем (отменённые не
+// показываем), 3 последних (свежий сверху).
 const past = computed(
   () =>
     cabinet.value?.lessons
-      .filter((l) => l.status === "conducted")
+      .filter(
+        (l) =>
+          l.status === "conducted" || (l.status === "planned" && isPast(l.scheduled_at)),
+      )
       .sort((a, b) => b.scheduled_at.localeCompare(a.scheduled_at))
       .slice(0, 3) ?? [],
 );
