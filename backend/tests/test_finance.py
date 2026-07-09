@@ -65,7 +65,7 @@ async def test_summary_and_parent_balance_math(client, seed_users):
 
     # Родитель видит тот же долг
     await login(client, "parent@test.ru")
-    balance = (await client.get("/api/parent/balance")).json()
+    balance = (await client.get("/api/parent/balance/" + str(student_id))).json()
     assert Decimal(balance["charged"]) == Decimal("4500")
     assert Decimal(balance["paid"]) == Decimal("1000")
     assert Decimal(balance["debt"]) == Decimal("3500")
@@ -89,7 +89,7 @@ async def test_prepayment_gives_negative_debt(client, seed_users):
     assert Decimal(row["debt"]) == Decimal("-10500")  # предоплачено 7 уроков
 
     await login(client, "parent@test.ru")
-    balance = (await client.get("/api/parent/balance")).json()
+    balance = (await client.get("/api/parent/balance/" + str(student_id))).json()
     assert Decimal(balance["debt"]) == Decimal("-10500")
     assert Decimal(balance["lesson_price"]) == Decimal("1500")
 

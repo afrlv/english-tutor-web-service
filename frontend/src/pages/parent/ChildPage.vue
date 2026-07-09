@@ -2,29 +2,55 @@
 import Card from "primevue/card";
 import Column from "primevue/column";
 import DataTable from "primevue/datatable";
+import SelectButton from "primevue/selectbutton";
 import Tag from "primevue/tag";
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 
-import { fetchChild } from "../../api";
-import type { ChildCard } from "../../api/types";
+import { fetchChild, fetchChildren } from "../../api";
+import type { ChildBalance, ChildCard } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
 import { formatDateTime, formatMoney } from "../../utils/format";
 
+const children = ref<ChildBalance[]>([]);
+const selectedId = ref<number | null>(null);
 const child = ref<ChildCard | null>(null);
 const loading = ref(true);
 
-onMounted(async () => {
+async function loadChild(id: number) {
+  loading.value = true;
   try {
-    child.value = await fetchChild();
+    child.value = await fetchChild(id);
   } finally {
     loading.value = false;
   }
+}
+
+onMounted(async () => {
+  const overview = await fetchChildren();
+  children.value = overview.children;
+  selectedId.value = overview.children[0]?.student_id ?? null;
+  if (selectedId.value !== null) await loadChild(selectedId.value);
+  else loading.value = false;
+});
+
+watch(selectedId, (id) => {
+  if (id !== null) loadChild(id);
 });
 </script>
 
 <template>
   <AppLayout>
     <div class="grid">
+      <!-- Переключатель детей (если их несколько) -->
+      <SelectButton
+        v-if="children.length > 1"
+        v-model="selectedId"
+        :options="children"
+        option-label="student_name"
+        option-value="student_id"
+        :allow-empty="false"
+      />
+
       <Card>
         <template #title>{{ child?.student.full_name ?? "…" }}</template>
         <template #content>

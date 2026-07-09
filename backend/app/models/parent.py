@@ -12,7 +12,8 @@ class Parent(Base, CreatedAtMixin):
     __tablename__ = "parents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True)
+    # Один родитель (user) может иметь несколько карточек — по одной на ребёнка
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     # Одна карточка родителя на ученика — леджер однозначно знает цену урока
     student_id: Mapped[int] = mapped_column(ForeignKey("students.id"), unique=True)
     lesson_price: Mapped[Decimal] = mapped_column(Numeric(10, 2), default=Decimal("0"))

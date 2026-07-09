@@ -10,8 +10,7 @@ MATRIX = [
     ("GET", "/api/finance/summary", {"superuser": 200, "teacher": 200, "student": 403, "parent": 403}),
     ("GET", "/api/me/cabinet", {"superuser": 403, "teacher": 403, "student": 200, "parent": 403}),
     ("GET", "/api/me/homeworks", {"student": 200, "teacher": 403}),
-    ("GET", "/api/parent/child", {"superuser": 403, "teacher": 403, "student": 403, "parent": 200}),
-    ("GET", "/api/parent/balance", {"parent": 200, "student": 403}),
+    ("GET", "/api/parent/children", {"superuser": 403, "teacher": 403, "student": 403, "parent": 200}),
 ]
 
 
@@ -26,7 +25,7 @@ async def test_rbac_matrix(client, seed_users, method, path, expectations):
 
 
 async def test_unauthenticated_gets_401(client, seed_users):
-    for path in ["/api/students", "/api/me/cabinet", "/api/parent/child", "/api/admin/users"]:
+    for path in ["/api/students", "/api/me/cabinet", "/api/parent/children", "/api/admin/users"]:
         resp = await client.get(path)
         assert resp.status_code == 401, path
 
@@ -47,6 +46,6 @@ async def test_private_note_hidden_from_student_and_parent(client, seed_users):
         assert "СЕКРЕТНАЯ ЗАМЕТКА" not in body, path
 
     await login(client, "parent@test.ru")
-    for path in ["/api/parent/child", "/api/parent/balance"]:
+    for path in [f"/api/parent/child/{student_id}", f"/api/parent/balance/{student_id}"]:
         body = (await client.get(path)).text
         assert "СЕКРЕТНАЯ ЗАМЕТКА" not in body, path

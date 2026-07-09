@@ -24,11 +24,13 @@ import { useRoute, useRouter } from "vue-router";
 import {
   addComment,
   addPayment,
+  attachParent,
   conductLesson,
   createCardSet,
   createLesson,
   createParent,
   createScheduleSlot,
+  listTeacherParents,
   copyCardSet,
   deleteCardSet,
   getCardSet,
@@ -57,6 +59,7 @@ import type {
   Parent,
   ScheduleSlot,
   Student,
+  TeacherParent,
   Transaction,
 } from "../../api/types";
 import AppLayout from "../../components/AppLayout.vue";
@@ -98,11 +101,20 @@ const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const weekdayOptions = WEEKDAYS.map((label, value) => ({ label, value }));
 // родитель
 const parentForm = ref({ email: "", full_name: "", lesson_price: 0, recommendations: "" });
+// выбор существующего родителя (привязка второго ребёнка) и список родителей учителя
+const existingParentId = ref<number | null>(null);
+const teacherParents = ref<TeacherParent[]>([]);
 // финансы
 const paymentAmount = ref<number | null>(null);
 const paymentComment = ref("");
 
 const lessonPrice = computed(() => parseFloat(parents.value[0]?.lesson_price ?? "0"));
+const parentSelectOptions = computed(() =>
+  teacherParents.value.map((p) => ({
+    label: `${p.full_name} (${p.email}) — ${p.children_count} реб.`,
+    value: p.user_id,
+  })),
+);
 // Список уроков: по возрастанию даты (ранняя сверху)
 const sortedLessons = computed(() =>
   lessons.value.slice().sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at)),
@@ -150,15 +162,23 @@ async function loadAll() {
     default_zoom_link: student.value.default_zoom_link ?? "",
     birthday: student.value.birthday ? new Date(student.value.birthday) : null,
   };
-  [lessons.value, parents.value, comments.value, transactions.value, slots.value, cardSets.value] =
-    await Promise.all([
-      listLessons(studentId),
-      listParents(studentId),
-      listComments(studentId),
-      listTransactions(studentId),
-      listSchedule(studentId),
-      listCardSets(studentId),
-    ]);
+  [
+    lessons.value,
+    parents.value,
+    comments.value,
+    transactions.value,
+    slots.value,
+    cardSets.value,
+    teacherParents.value,
+  ] = await Promise.all([
+    listLessons(studentId),
+    listParents(studentId),
+    listComments(studentId),
+    listTransactions(studentId),
+    listSchedule(studentId),
+    listCardSets(studentId),
+    listTeacherParents(),
+  ]);
   const p = parents.value[0];
   if (p) {
     parentForm.value = {
@@ -359,6 +379,14 @@ async function saveParent() {
         recommendations: parentForm.value.recommendations,
       });
       toast.add({ severity: "success", summary: "Карточка родителя обновлена", life: 3000 });
+    } else if (existingParentId.value !== null) {
+      // привязать уже заведённого родителя (другого ученика) к этому ученику
+      await attachParent(studentId, {
+        parent_user_id: existingParentId.value,
+        lesson_price: String(parentForm.value.lesson_price ?? 0),
+        recommendations: parentForm.value.recommendations || undefined,
+      });
+      toast.add({ severity: "success", summary: "Родитель привязан", life: 3000 });
     } else {
       await createParent(studentId, {
         email: parentForm.value.email,
@@ -373,7 +401,11 @@ async function saveParent() {
         life: 4000,
       });
     }
-    parents.value = await listParents(studentId);
+    existingParentId.value = null;
+    [parents.value, teacherParents.value] = await Promise.all([
+      listParents(studentId),
+      listTeacherParents(),
+    ]);
   } catch (e) {
     showError(e, "Не удалось сохранить карточку родителя");
   }
@@ -642,20 +674,34 @@ async function onSetPassword() {
             <!-- Родитель -->
             <TabPanel value="parent">
               <form class="form" @submit.prevent="saveParent">
-                <label>
-                  Имя родителя
-                  <InputText v-model="parentForm.full_name" required fluid />
-                </label>
-                <label>
-                  Почта {{ parents.length ? "" : "(туда придут логин и пароль)" }}
-                  <InputText
-                    v-model="parentForm.email"
-                    type="email"
-                    required
-                    :disabled="parents.length > 0"
+                <label v-if="!parents.length && parentSelectOptions.length">
+                  Привязать существующего родителя
+                  <Select
+                    v-model="existingParentId"
+                    :options="parentSelectOptions"
+                    option-label="label"
+                    option-value="value"
+                    placeholder="— завести нового —"
+                    show-clear
                     fluid
                   />
                 </label>
+                <template v-if="existingParentId === null">
+                  <label>
+                    Имя родителя
+                    <InputText v-model="parentForm.full_name" required fluid />
+                  </label>
+                  <label>
+                    Почта {{ parents.length ? "" : "(туда придут логин и пароль)" }}
+                    <InputText
+                      v-model="parentForm.email"
+                      type="email"
+                      required
+                      :disabled="parents.length > 0"
+                      fluid
+                    />
+                  </label>
+                </template>
                 <label>
                   Стоимость урока, ₽
                   <InputNumber v-model="parentForm.lesson_price" :min="0" fluid />
@@ -666,7 +712,13 @@ async function onSetPassword() {
                 </label>
                 <Button
                   type="submit"
-                  :label="parents.length ? 'Сохранить' : 'Создать карточку родителя'"
+                  :label="
+                    parents.length
+                      ? 'Сохранить'
+                      : existingParentId !== null
+                        ? 'Привязать родителя'
+                        : 'Создать карточку родителя'
+                  "
                 />
               </form>
             </TabPanel>
